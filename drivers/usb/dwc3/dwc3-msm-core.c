@@ -581,6 +581,37 @@ struct dwc3_msm {
 void *dwc_trace_ipc_log_ctxt;
 
 static void dwc3_pwr_event_handler(struct dwc3_msm *mdwc);
+#ifdef OPLUS_FEATURE_CHG_BASIC
+
+static bool (*oplus_ignore_usb_notify)(void);
+static int dwc3_msm_set_role(struct dwc3_msm *mdwc, enum usb_role role);
+void oplus_dwc3_config_usbphy_pfunc(bool (*pfunc)(void))
+{
+	oplus_ignore_usb_notify = pfunc;
+}
+EXPORT_SYMBOL(oplus_dwc3_config_usbphy_pfunc);
+
+void oplus_usb_set_none_role(void)
+{
+	printk(KERN_ERR "%s\n", __func__);
+}
+EXPORT_SYMBOL(oplus_usb_set_none_role);
+
+static bool oplus_dwc3_need_set_usbphy_hz(void)
+{
+	bool ret = false;
+
+	if (oplus_ignore_usb_notify == NULL) {
+		ret = false;
+	} else {
+		ret = oplus_ignore_usb_notify();
+	}
+
+	printk(KERN_ERR "%s, set usbphy hz:%d\n", __func__, ret);
+	return ret;
+}
+#endif
+
 static int get_chg_type(struct dwc3_msm *mdwc);
 
 static inline void dwc3_msm_ep_writel(void __iomem *base, u32 offset, u32 value)
@@ -2947,6 +2978,15 @@ static void dwc3_msm_set_clk_sel(struct dwc3_msm *mdwc)
 		dwc3_msm_switch_utmi(mdwc, 1);
 }
 
+static int dwc3_device_core_soft_reset(struct dwc3_msm *mdwc)
+{
+	struct dwc3 *dwc = platform_get_drvdata(mdwc->dwc3);
+
+	dwc3_msm_notify_event(dwc, DWC3_GSI_EVT_BUF_SETUP, 0);
+
+	return 0;
+}
+
 void dwc3_msm_notify_event(struct dwc3 *dwc,
 		enum dwc3_notify_event event, unsigned int value)
 {
@@ -3111,6 +3151,9 @@ void dwc3_msm_notify_event(struct dwc3 *dwc,
 				GSI_GENERAL_CFG_REG(mdwc->gsi_reg),
 				GSI_EN_MASK, 0);
 		}
+		break;
+	case DWC3_CONTROLLER_SOFT_RESET:
+		dwc3_device_core_soft_reset(mdwc);
 		break;
 	default:
 		dev_dbg(mdwc->dev, "unknown dwc3 event\n");
@@ -3401,6 +3444,14 @@ static void enable_usb_pdc_interrupt(struct dwc3_msm *mdwc, bool enable)
 				IRQ_TYPE_EDGE_FALLING, enable);
 
 	} else {
+		#ifdef OPLUS_FEATURE_CHG_BASIC
+		configure_usb_wakeup_interrupt(mdwc,
+			&mdwc->wakeup_irq[DP_HS_PHY_IRQ],
+			 IRQF_TRIGGER_HIGH | IRQ_TYPE_LEVEL_HIGH, true);
+		configure_usb_wakeup_interrupt(mdwc,
+			&mdwc->wakeup_irq[DM_HS_PHY_IRQ],
+			IRQF_TRIGGER_HIGH | IRQ_TYPE_LEVEL_HIGH, true);
+		#else
 		/* When in host mode, with no device connected, set the HS
 		 * to level high triggered.  This is to ensure device connection
 		 * is seen, if device pulls up DP before the suspend routine
@@ -3416,6 +3467,7 @@ static void enable_usb_pdc_interrupt(struct dwc3_msm *mdwc, bool enable)
 			mdwc->in_host_mode ?
 			(IRQF_TRIGGER_HIGH | IRQ_TYPE_LEVEL_HIGH) :
 			IRQ_TYPE_EDGE_RISING, true);
+		#endif
 	}
 
 	configure_usb_wakeup_interrupt(mdwc,
@@ -4514,7 +4566,15 @@ static int dwc3_msm_set_role(struct dwc3_msm *mdwc, enum usb_role role)
 		return -EINVAL;
 
 	mutex_lock(&mdwc->role_switch_mutex);
+
 	cur_role = dwc3_msm_get_role(mdwc);
+#ifdef OPLUS_FEATURE_CHG_BASIC
+	if (oplus_dwc3_need_set_usbphy_hz() == true && role != USB_ROLE_NONE) {
+		pr_err("!!!ignore the notify to start USB device mode");
+		mutex_unlock(&mdwc->role_switch_mutex);
+		return 0;
+	}
+#endif
 
 	dbg_log_string("cur_role:%s new_role:%s\n", usb_role_string(cur_role),
 						usb_role_string(role));
@@ -5921,6 +5981,7 @@ static int dwc3_otg_start_peripheral(struct dwc3_msm *mdwc, int on)
 	struct dwc3 *dwc = platform_get_drvdata(mdwc->dwc3);
 	int timeout = 1000;
 	int ret;
+	u32 reg = 0;
 
 	pm_runtime_get_sync(mdwc->dev);
 	dbg_event(0xFF, "StrtGdgt gsync",
@@ -5938,6 +5999,16 @@ static int dwc3_otg_start_peripheral(struct dwc3_msm *mdwc, int on)
 		 */
 		if (dwc->dr_mode == USB_DR_MODE_OTG)
 			flush_work(&dwc->drd_work);
+
+		/*
+		 * For DRD controllers, GUSB3PIPECTL.SUSPENDENABLE must be cleared
+		 * after power-on reset, and it can be set after core
+		 * initialization. Hence, it is cleared at dwc3_phy_setup and set
+		 * here.
+		 */
+		reg = dwc3_msm_read_reg(mdwc->base, DWC3_GUSB3PIPECTL(0));
+		reg |= DWC3_GUSB3PIPECTL_SUSPHY;
+		dwc3_msm_write_reg(mdwc->base, DWC3_GUSB3PIPECTL(0), reg);
 		dwc3_msm_notify_event(dwc, DWC3_GSI_EVT_BUF_SETUP, 0);
 
 		dwc3_override_vbus_status(mdwc, true);
