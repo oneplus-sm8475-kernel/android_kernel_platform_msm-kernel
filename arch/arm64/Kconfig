@@ -2062,6 +2062,8 @@ source "drivers/acpi/Kconfig"
 
 source "arch/arm64/kvm/Kconfig"
 
+source "arch/arm64/kernel/secureguard/Kconfig"
+
 source "arch/arm64/gunyah/Kconfig"
 
 if CRYPTO
