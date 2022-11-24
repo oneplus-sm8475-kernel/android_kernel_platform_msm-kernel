@@ -29,7 +29,6 @@
 #include <soc/oplus/system/boot_mode.h>
 #endif /* OPLUS_FEATURE_CHG_BASIC */
 
-#define SE_I2C_NOISE_CANCEL_CTL		(0x234)
 #define SE_I2C_TX_TRANS_LEN		(0x26C)
 #define SE_I2C_RX_TRANS_LEN		(0x270)
 #define SE_I2C_SCL_COUNTERS		(0x278)
@@ -351,10 +350,6 @@ static int geni_i2c_prepare(struct geni_i2c_dev *gi2c)
 					"i2c fifo/se-dma mode. fifo depth:%d\n",
 					gi2c_tx_depth);
 		}
-		/* Noise rejection changes, here adding extra sampling levels on SDA,
-		* to reject short low pulses.
-		*/
-		writel_relaxed(0x8, gi2c->base + SE_I2C_NOISE_CANCEL_CTL);
 	}
 	return 0;
 }
@@ -377,10 +372,12 @@ static irqreturn_t geni_i2c_irq(int irq, void *dev)
 	}
 
 	if ((m_stat & M_CMD_FAILURE_EN) ||
-		    (dm_rx_st & (DM_I2C_CB_ERR)) ||
-		    (m_stat & M_CMD_CANCEL_EN) ||
-		    (m_stat & M_CMD_ABORT_EN) ||
-		    (m_stat & M_GP_IRQ_1_EN)) {
+		(dm_rx_st & (DM_I2C_CB_ERR)) ||
+		(m_stat & M_CMD_CANCEL_EN) ||
+		(m_stat & M_CMD_ABORT_EN) ||
+		(m_stat & M_GP_IRQ_1_EN) ||
+		(m_stat & M_GP_IRQ_3_EN) ||
+		(m_stat & M_GP_IRQ_4_EN)) {
 
 		if (m_stat & M_GP_IRQ_1_EN)
 			geni_i2c_err(gi2c, I2C_NACK);
@@ -394,8 +391,6 @@ static irqreturn_t geni_i2c_irq(int irq, void *dev)
 			geni_i2c_err(gi2c, GENI_ILLEGAL_CMD);
 		if (m_stat & M_CMD_ABORT_EN)
 			geni_i2c_err(gi2c, GENI_ABORT_DONE);
-		if (m_stat & M_GP_IRQ_0_EN)
-			geni_i2c_err(gi2c, GP_IRQ0);
 
 		if (!dma)
 			writel_relaxed(0, (gi2c->base +
@@ -1018,11 +1013,11 @@ static int geni_i2c_gsi_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[],
 			if ((geni_ios & 0x3) != 0x3) { //SCL:b'1, SDA:b'0
 				I2C_LOG_ERR(gi2c->ipcl, true, gi2c->dev,
 					"%s: IO lines not in good state\n", __func__);
-				/* doing pending cancel only rtl based SE's */
-				if (gi2c->is_i2c_rtl_based) {
-					gi2c->prev_cancel_pending = true;
-					goto geni_i2c_gsi_cancel_pending;
-				}
+					/* doing pending cancel only rtl based SE's */
+					if (gi2c->is_i2c_rtl_based) {
+						gi2c->prev_cancel_pending = true;
+						goto geni_i2c_gsi_cancel_pending;
+					}
 			}
 		}
 geni_i2c_err_prep_sg:

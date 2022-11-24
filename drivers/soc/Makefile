@@ -30,13 +30,13 @@ obj-y				+= xilinx/
 obj-$(CONFIG_ARCH_ZX)		+= zte/
 obj-$(CONFIG_SOC_KENDRYTE)	+= kendryte/
 
-#ifdef OPLUS_FEATURE_SUGOV_POWER_EFFIENCY
-obj-$(CONFIG_OPLUS_FEATURE_SUGOV_POWER_EFFIENCY) += oplus/cpufreq_effiency/
-#endif /* OPLUS_FEATURE_SUGOV_POWER_EFFIENCY */
-
 #ifdef OPLUS_BUG_STABILITY
 obj-$(CONFIG_OPLUS_SYSTEM_KERNEL)	+= oplus/system/
 #endif /* OPLUS_BUG_STABILITY */
+
+#ifdef OPLUS_FEATURE_MM_FEEDBACK
+obj-$(CONFIG_OPLUS_FEATURE_MM_FEEDBACK)	+= oplus/multimedia/
+#endif /* OPLUS_FEATURE_MM_FEEDBACK */
 
 #ifdef OPLUS_FEATURE_TP_BASIC
 obj-$(CONFIG_OPLUS_DEVICE_IFNO)  +=  oplus/device_info/
@@ -46,22 +46,22 @@ obj-$(CONFIG_OPLUS_DEVICE_IFNO)  +=  oplus/device_info/
 obj-y                       += oplus/sensor/
 #endif /* OPLUS_FEATURE_SENSOR_SMEM */
 
-#ifdef OPLUS_FEATURE_OCH
-obj-$(CONFIG_OPLUS_FEATURE_OCH) += oplus/power/cpufreq_health/
-#endif /* OPLUS_FEATURE_OCH */
-
-#ifdef OPLUS_FEATURE_SENSOR_SMEM
-obj-$(CONFIG_HORAE_THERMAL_SHELL) += oplus/thermal/
-#endif /* OPLUS_FEATURE_SENSOR_SMEM */
-
-#ifdef OPLUS_FEATURE_RT_TRACE
-obj-$(CONFIG_OPLUS_FEATURE_RT_OPT_INFO) += oplus/rt_info/
-#endif /* OPLUS_FEATURE_RT_TRACE */
+#ifdef OPLUS_DFR_FEATURE
+obj-y += oplus/dfr/
+#endif /* OPLUS_DFR_FEATURE */
 
 #ifdef OPLUS_FEATURE_MIDAS_GKI
 obj-$(CONFIG_OPLUS_FEATURE_MIDAS_GKI) += oplus/power/midas/
 #endif
 
-#ifdef OPLUS_FEATURE_OMRG
-obj-$(CONFIG_OPLUS_OMRG) += oplus/thermal/oplus_omrg/
-#endif /* OPLUS_FEATURE_OMRG */
+#ifdef OPLUS_FEATURE_DFT
+obj-y += oplus/dft/
+#endif /* ifdef OPLUS_FEATURE_DFT */
+
+#ifdef OPLUS_FEATURE_BOOT
+obj-y += oplus/boot/
+#endif /* OPLUS_FEATURE_BOOT */
+
+#ifdef OPLUS_FEATURE_MDMFEATURE
+obj-$(CONFIG_OPLUS_FEATURE_MDMFEATURE)     += oplus/mdmfeature/
+#endif /*OPLUS_FEATURE_MDMFEATURE*/

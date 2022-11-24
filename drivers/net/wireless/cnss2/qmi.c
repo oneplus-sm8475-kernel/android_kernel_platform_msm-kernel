@@ -241,8 +241,7 @@ static void cnss_wlfw_host_cap_parse_mlo(struct cnss_plat_data *plat_priv,
 static bool needSupportWsa() {
 	int project_id = get_project();
 	cnss_pr_dbg("project: %d\n", project_id);
-	if (project_id == 20846 || project_id == 20847 || project_id == 133194
-            || project_id == 21841 || project_id == 21842) {
+	if (project_id == 20846 || project_id == 20847 || project_id == 133194) {
 		return true;
 	}
 	return false;
@@ -627,45 +626,27 @@ out:
 
 #ifdef OPLUS_FEATURE_WIFI_BDF
 //Modify for: multi projects using different bdf
-static bool is_prj_support_region_id() {
-        int project_id = get_project();
-        cnss_pr_dbg("project: %d\n", project_id);
-        if (project_id == 20846 || project_id == 20847 || project_id == 133194
-            || project_id == 21841 || project_id == 21842) {
-                return true;
-        }
-        return false;
-}
-
 static void cnss_get_oplus_bdf_file_name(struct cnss_plat_data *plat_priv, char* file_name, u32 filename_len) {
 	int reg_id = get_Operator_Version();
 	cnss_pr_dbg("region id: %d", reg_id);
 
 	if (plat_priv->chip_info.chip_id & CHIP_ID_GF_MASK) {
-		if (is_prj_support_region_id()) {
-			if (reg_id == REG_ID_CHN_IN) {
-				snprintf(file_name, filename_len, BDF_FILE_CHN_IN_GF);
-			} else if (reg_id == REG_ID_EU) {
-				snprintf(file_name, filename_len, BDF_FILE_EU_GF);
-			} else if (reg_id == REG_ID_NA) {
-				snprintf(file_name, filename_len, BDF_FILE_NA_GF);
-			} else {
-				snprintf(file_name, filename_len, ELF_BDF_FILE_NAME_GF);
-			}
+		if (reg_id == REG_ID_CHN_IN) {
+			snprintf(file_name, filename_len, BDF_FILE_CHN_IN_GF);
+		} else if (reg_id == REG_ID_EU) {
+			snprintf(file_name, filename_len, BDF_FILE_EU_GF);
+		} else if (reg_id == REG_ID_NA) {
+			snprintf(file_name, filename_len, BDF_FILE_NA_GF);
 		} else {
 			snprintf(file_name, filename_len, ELF_BDF_FILE_NAME_GF);
 		}
 	} else {
-		if (is_prj_support_region_id()) {
-			if (reg_id == REG_ID_CHN_IN) {
-				snprintf(file_name, filename_len, BDF_FILE_CHN_IN);
-			} else if (reg_id == REG_ID_EU) {
-				snprintf(file_name, filename_len, BDF_FILE_EU);
-			} else if (reg_id == REG_ID_NA) {
-				snprintf(file_name, filename_len, BDF_FILE_NA);
-			} else {
-				snprintf(file_name, filename_len, ELF_BDF_FILE_NAME);
-			}
+		if (reg_id == REG_ID_CHN_IN) {
+			snprintf(file_name, filename_len, BDF_FILE_CHN_IN);
+		} else if (reg_id == REG_ID_EU) {
+			snprintf(file_name, filename_len, BDF_FILE_EU);
+		} else if (reg_id == REG_ID_NA) {
+			snprintf(file_name, filename_len, BDF_FILE_NA);
 		} else {
 			snprintf(file_name, filename_len, ELF_BDF_FILE_NAME);
 		}

@@ -22,7 +22,6 @@
 #if IS_ENABLED(CONFIG_OPLUS_OMRG)
 #include <linux/oplus_omrg.h>
 #endif
-
 #if IS_ENABLED(CONFIG_OPLUS_FEATURE_SUGOV_POWER_EFFIENCY)
 #include <linux/cpufreq_effiency.h>
 #endif
@@ -30,7 +29,6 @@
 #if IS_ENABLED(CONFIG_OPLUS_FEATURE_GKI_CPUFREQ_BOUNCING)
 #include <linux/cpufreq_bouncing.h>
 #endif
-
 #if IS_ENABLED(CONFIG_OPLUS_FEATURE_OCH)
 #include <linux/cpufreq_health.h>
 #endif
@@ -393,7 +391,6 @@ static void qcom_cpufreq_ready(struct cpufreq_policy *policy)
 #if IS_ENABLED(CONFIG_OPLUS_OMRG)
 	omrg_cpufreq_register(policy);
 #endif
-
 #if IS_ENABLED(CONFIG_OPLUS_FEATURE_SUGOV_POWER_EFFIENCY)
 	frequence_opp_init(policy);
 #endif
@@ -401,7 +398,6 @@ static void qcom_cpufreq_ready(struct cpufreq_policy *policy)
 #if IS_ENABLED(CONFIG_OPLUS_FEATURE_GKI_CPUFREQ_BOUNCING)
 	cb_stuff_init(policy);
 #endif
-
 #if IS_ENABLED(CONFIG_OPLUS_FEATURE_OCH)
 	if(cpufreq_health_register(policy))
 		pr_err("cpufreq health init failed!\n");

@@ -22,7 +22,6 @@
 #ifdef OPLUS_FEATURE_WIFI_MAC
 //Add for boot wlan mode not use NV mac
 #include <soc/oplus/system/boot_mode.h>
-#include <soc/oplus/system/oplus_project.h>
 #endif /* OPLUS_FEATURE_WIFI_MAC */
 
 #include "cnss_plat_ipc_qmi.h"
@@ -3825,29 +3824,9 @@ static void icnss_create_fw_state_kobj(void) {
 }
 #endif /* OPLUS_FEATURE_WIFI_DCS_SWITCH */
 
-#ifdef OPLUS_FEATURE_WIFI_DCS_SWITCH
-static bool need_skip_cnss() {
-    bool ret = false;
-
-    int project_id = get_project();
-    if (project_id == 21125) {
-        cnss_pr_dbg("project: %d\n", project_id);
-        ret = true;
-    }
-
-    return ret;
-}
-#endif /* OPLUS_FEATURE_WIFI_DCS_SWITCH */
-
 static int __init cnss_initialize(void)
 {
 	int ret = 0;
-#ifdef OPLUS_FEATURE_WIFI_DCS_SWITCH
-    if (need_skip_cnss()) {
-        cnss_pr_dbg("skip cnss_initialize\n");
-        return ret;
-    }
-#endif /* OPLUS_FEATURE_WIFI_DCS_SWITCH */
 
 	if (!cnss_is_valid_dt_node_found())
 		return -ENODEV;
@@ -3865,13 +3844,6 @@ static int __init cnss_initialize(void)
 
 static void __exit cnss_exit(void)
 {
-#ifdef OPLUS_FEATURE_WIFI_DCS_SWITCH
-        if (need_skip_cnss()) {
-            cnss_pr_dbg("skip cnss_exit\n");
-            return;
-        }
-#endif /* OPLUS_FEATURE_WIFI_DCS_SWITCH */
-
 	platform_driver_unregister(&cnss_platform_driver);
 	cnss_debug_deinit();
 }

@@ -41,7 +41,6 @@
 #define MD_SS_ENABLED		('E' << 24 | 'N' << 16 | 'B' << 8 | 'L' << 0)
 
 #ifdef OPLUS_FEATURE_MODEM_MINIDUMP
-//Add for customized subsystem ramdump to skip generate dump cause by SAU
 bool SKIP_GENERATE_RAMDUMP = false;
 EXPORT_SYMBOL(SKIP_GENERATE_RAMDUMP);
 #endif
@@ -192,7 +191,6 @@ void qcom_minidump(struct rproc *rproc, unsigned int minidump_id, rproc_dumpfn_t
 	}
 
 	#ifdef OPLUS_FEATURE_MODEM_MINIDUMP
-	 //Add for customized subsystem ramdump to skip generate dump cause by SAU
 	 if (SKIP_GENERATE_RAMDUMP) {
 		dev_err(&rproc->dev, "Skip ramdump cuase by ap normal trigger.\n");
 	 	SKIP_GENERATE_RAMDUMP = false;

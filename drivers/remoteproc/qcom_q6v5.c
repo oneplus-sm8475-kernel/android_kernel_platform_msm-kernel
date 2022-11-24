@@ -35,18 +35,11 @@
 #define REMOTEPROC_ADSP "remoteproc-adsp"
 #endif
 
-#if IS_ENABLED(CONFIG_OPLUS_FEATURE_FEEDBACK)
-#include <soc/oplus/system/kernel_fb.h>
-#define REMOTEPROC_SLPI "remoteproc-slpi"
-#define REMOTEPROC_CDSP "remoteproc-cdsp"
-#endif
-
 #define Q6V5_PANIC_DELAY_MS	200
 
 #ifdef OPLUS_FEATURE_MODEM_MINIDUMP
 #define MAX_REASON_LEN 300
 #define MAX_DEVICE_NAME 32
-#define CALLSTACK_LEN 64
 struct dev_crash_report_work {
 	struct work_struct  work;
 	struct device *crash_dev;
@@ -58,7 +51,6 @@ static struct workqueue_struct *crash_report_workqueue = NULL;
 #endif
 
 #ifdef OPLUS_FEATURE_MODEM_MINIDUMP
-//Add for customized subsystem ramdump to skip generate dump cause by SAU
 #define MAX_SSR_REASON_LEN	256U
 #define MAX_SSR_DEFAULT_REASON_LEN 16
 #define REMOTEPROC_MSS "remoteproc-mss"
@@ -309,8 +301,6 @@ static irqreturn_t q6v5_wdog_interrupt(int irq, void *data)
 	char *msg;
 	#ifdef OPLUS_FEATURE_MODEM_MINIDUMP
 	char reason[MAX_SSR_REASON_LEN];
-	int reason_len = 0;
-	char uevent_reason[MAX_SSR_REASON_LEN];
 	const char *name =	q6v5->rproc->name;
 	#endif
 
@@ -338,23 +328,11 @@ static irqreturn_t q6v5_wdog_interrupt(int irq, void *data)
 		}
 	}
 	#endif
-#if IS_ENABLED(CONFIG_OPLUS_FEATURE_FEEDBACK)
-	if (strstr(name, REMOTEPROC_SLPI) || strstr(name, REMOTEPROC_CDSP)) {
-		if (!IS_ERR(msg) && len > 0 && msg[0]) {
-			strcat(reason, "$$module@@");
-		} else {
-			strcat(reason, "watchdog without message$$module@@");
-		}
-		strcat(reason, name);
-		oplus_kevent_fb_str(FB_SENSOR, FB_SENSOR_ID_CRASH, reason);
-	}
-#endif
 
 	#ifdef OPLUS_FEATURE_MODEM_MINIDUMP
 	if (!IS_ERR(msg) && len > 0 && msg[0]) {
 		strlcpy(reason, msg, min(len, (size_t)MAX_SSR_REASON_LEN));
 		dev_err(q6v5->dev, "%s subsystem failure reason: %s.\n", name, reason);
-		//Add for customized subsystem ramdump to skip generate dump cause by SAU
 		if (strstr(name, REMOTEPROC_MSS)) {
 			mdmreason_set(reason);
 			dev_err(q6v5->dev, "debug modem subsystem failure reason: %s.\n", reason);
@@ -363,17 +341,8 @@ static irqreturn_t q6v5_wdog_interrupt(int irq, void *data)
 				SKIP_GENERATE_RAMDUMP = true;
 			}
 			#ifdef OPLUS_FEATURE_MODEM_MINIDUMP
-			memset(uevent_reason, 0, sizeof(uevent_reason));
-			reason_len = strlen(reason);
-			dev_err(q6v5->dev, "debug modem subsystem failure reason_len: %d\n", reason_len);
-			if (reason_len > CALLSTACK_LEN) {
-				strncpy(uevent_reason, reason, reason_len-CALLSTACK_LEN);
-				dev_err(q6v5->dev, "debug modem subsystem failure uevent_reason: %s\n", uevent_reason);
-				subsystem_schedule_crash_uevent_work(q6v5->dev, name, uevent_reason);
-			} else {
-				dev_err(q6v5->dev, "[crash_log]: %s to schedule crash work1!\n", name);
-				subsystem_schedule_crash_uevent_work(q6v5->dev, name, reason);
-			}
+			dev_err(q6v5->dev, "[crash_log]: %s to schedule crash work1!\n", name);
+			subsystem_schedule_crash_uevent_work(q6v5->dev, name, reason);
 			#endif
 		}
 		if (strstr(name, REMOTEPROC_ADSP)) {
@@ -383,7 +352,6 @@ static irqreturn_t q6v5_wdog_interrupt(int irq, void *data)
 	}
 	else {
 		dev_err(q6v5->dev, "%s SFR: (unknown, empty string found).\n", name);
-		//if (!strncmp(name, "modem", 5) || !strncmp(name, "adsp", 4)) {
 		if (strstr(name, REMOTEPROC_ADSP) || strstr(name, REMOTEPROC_MSS)) {
 			subsystem_schedule_crash_uevent_work(q6v5->dev, name, 0);
 		}
@@ -411,8 +379,6 @@ static irqreturn_t q6v5_fatal_interrupt(int irq, void *data)
 
 	#ifdef OPLUS_FEATURE_MODEM_MINIDUMP
 	char reason[MAX_SSR_REASON_LEN];
-	int reason_len = 0;
-	char uevent_reason[MAX_SSR_REASON_LEN];
 	const char *name =	q6v5->rproc->name;
 	#endif
 
@@ -439,23 +405,10 @@ static irqreturn_t q6v5_fatal_interrupt(int irq, void *data)
 	}
 #endif
 
-#if IS_ENABLED(CONFIG_OPLUS_FEATURE_FEEDBACK)
-	if (strstr(name, REMOTEPROC_SLPI) || strstr(name, REMOTEPROC_CDSP)) {
-		if (!IS_ERR(msg) && len > 0 && msg[0]) {
-			strcat(reason, "$$module@@");
-		} else {
-			strcat(reason, "fatal error without message$$module@@");
-		}
-		strcat(reason, name);
-		oplus_kevent_fb_str(FB_SENSOR, FB_SENSOR_ID_CRASH, reason);
-	}
-#endif
-
 	#ifdef OPLUS_FEATURE_MODEM_MINIDUMP
 	if (!IS_ERR(msg) && len > 0 && msg[0]) {
 		strlcpy(reason, msg, min(len, (size_t)MAX_SSR_REASON_LEN));
 		dev_err(q6v5->dev, "%s subsystem failure reason: %s.\n", name, reason);
-		//Add for customized subsystem ramdump to skip generate dump cause by SAU
 		if (strstr(name, REMOTEPROC_MSS)) {
 			mdmreason_set(reason);
 			dev_err(q6v5->dev, "debug modem subsystem failure reason: %s.\n", reason);
@@ -465,17 +418,8 @@ static irqreturn_t q6v5_fatal_interrupt(int irq, void *data)
 			}
 
 			#ifdef OPLUS_FEATURE_MODEM_MINIDUMP
-			memset(uevent_reason, 0, sizeof(uevent_reason));
-			reason_len = strlen(reason);
-			dev_err(q6v5->dev, "debug modem subsystem failure reason_len: %d\n", reason_len);
-			if (reason_len > CALLSTACK_LEN) {
-				strncpy(uevent_reason, reason, reason_len-CALLSTACK_LEN);
-				dev_err(q6v5->dev, "debug modem subsystem failure uevent_reason: %s\n", uevent_reason);
-				subsystem_schedule_crash_uevent_work(q6v5->dev, name, uevent_reason);
-			} else {
-				dev_err(q6v5->dev, "[crash_log]: %s to schedule crash work1!\n", name);
-				subsystem_schedule_crash_uevent_work(q6v5->dev, name, reason);
-			}
+			dev_err(q6v5->dev, "[crash_log]: %s to schedule crash work1!\n", name);
+			subsystem_schedule_crash_uevent_work(q6v5->dev, name, reason);
 			#endif
 		}
 		if (strstr(name, REMOTEPROC_ADSP)) {

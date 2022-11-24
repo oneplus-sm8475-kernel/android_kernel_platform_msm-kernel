@@ -1040,7 +1040,7 @@ static struct platform_driver gf_driver = {
 
 static int __init gf_init(void)
 {
-	int status = 0;
+	int status;
 
     if((FP_GOODIX_3268 != get_fpsensor_type())
         && (FP_GOODIX_5288 != get_fpsensor_type())
@@ -1049,7 +1049,7 @@ static int __init gf_init(void)
         && (FP_GOODIX_OPTICAL_95 != get_fpsensor_type())
 		&& (FP_GOODIX_3626 != get_fpsensor_type())){
         pr_err("%s, found not goodix sensor\n", __func__);
-        pr_err("%s, return 0 for load ko successfully\n", __func__);
+        status = -EINVAL;
         return status;
     }
 	/* Claim our 256 reserved device numbers.  Then register a class

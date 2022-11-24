@@ -46,7 +46,6 @@ static struct poweroff_reason reasons[] = {
 	{ "android",			0x29 },//PON_RESTART_REASON_ANDROID= 0x29,
 	{ "safe",			0x2A },//PON_RESTART_REASON_SAFE= 0x2A,
 	//#ifdef OPLUS_FEATURE_AGINGTEST  
-	/*xiaofan.yang, 2019/01/07,Add for factory agingtest*/
 	{ "sbllowmemtest",		0x2B },///PON_RESTART_REASON_SBL_DDRTEST= 0x2B,
 	{ "sblmemtest", 		0x2C },///PON_RESTART_REASON_SBL_DDR_CUS= 0x2C,
 	{ "usermemaging",		0x2D },///PON_RESTART_REASON_MEM_AGING= 0x2D,

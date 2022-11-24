@@ -77,7 +77,7 @@
 static uint16_t g_def_sz[CFG_MAX_SENSORS]       = { SZ_6K,  SZ_6K,  SZ_6K,  SZ_6K,  SZ_1K,  SZ_1K,  SZ_1K,  SZ_1K,
                                                 SZ_512, SZ_512, SZ_512, SZ_512, SZ_512, SZ_512, SZ_512, SZ_256};
 static char *g_chn_type[CFG_MAX_SENSORS]    = { "acc1",    "gyro1",    "mag",      "temp",
-                                                "press",   "als1",     "proxi",    "n/a",
+                                                "press",   "als1",     "proxi",    "hall",
                                                 "acc2",    "gyro2",    "als2",     "als3",
                                                 "n/a",     "n/a",      "n/a",      "n/a"};
 
@@ -294,11 +294,11 @@ static ssize_t proc_data_r(struct file *file, char __user *buf, size_t count, lo
 
     for(i = 0; i < CFG_MAX_SENSORS; i++) {
         if ( i == g_data->cur_chn) {
-            len                 = snprintf(d, 2048-total, "%d<  %-4X%s\t%X\t%X\t%X\t%X\t%X\t%X\t%X\t%d\n",
+            len                 = snprintf(d, 2048-total, "%02d< %-4X%s\t%X\t%X\t%X\t%X\t%X\t%X\t%X\t%d\n",
                                     i, smem->sst[i], g_chn_type[i], smem->bp[i], smem->size[i], smem->type[i],
                                     smem->start[i],  smem->wp[i], smem->rp[i], smem->ecode[i], g_data->time_left[i]);
         } else {
-            len                 = snprintf(d, 2048-total, "%d   %-4X%s\t%X\t%X\t%X\t%X\t%X\t%X\t%X\t%d\n",
+            len                 = snprintf(d, 2048-total, "%02d  %-4X%s\t%X\t%X\t%X\t%X\t%X\t%X\t%X\t%d\n",
                                     i, smem->sst[i], g_chn_type[i], smem->bp[i], smem->size[i], smem->type[i],
                                     smem->start[i],  smem->wp[i], smem->rp[i], smem->ecode[i], g_data->time_left[i]);
 

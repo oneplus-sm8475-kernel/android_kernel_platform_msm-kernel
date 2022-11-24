@@ -64,8 +64,6 @@ qseecom-mod-$(CONFIG_QSEECOM)  := qseecom.o
 qseecom-mod-$(CONFIG_COMPAT)	+= compat_qseecom.o
 obj-$(CONFIG_WIGIG_SENSING_SPI)	+= wigig_sensing.o
 obj-y	+= tri_state_key/
-obj-$(CONFIG_AW8680X_SENSOR)	+= aw8680x/
-obj-$(CONFIG_CSA37F71_SENSOR_NDT)	+= cs_press/
 
 #ifdef OPLUS_FEATURE_RF_CABLE_DETECT
 oplus_bsp_rfcablemonitor-y           := oplus_rf_cable_monitor.o

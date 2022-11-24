@@ -19,12 +19,6 @@
 #ifdef OPLUS_ARCH_EXTENDS
 #include <linux/of_gpio.h>
 #include <linux/gpio.h>
-
-#if IS_ENABLED(CONFIG_TCPC_CLASS)
-#include <tcpci.h>
-#include <tcpm.h>
-#include <tcpci_typec.h>
-#endif
 #endif /* OPLUS_ARCH_EXTENDS */
 
 #if IS_ENABLED(CONFIG_OPLUS_FEATURE_MM_FEEDBACK)
@@ -33,13 +27,6 @@
 
 #define FSA4480_I2C_NAME	"fsa4480-driver"
 
-#ifdef OPLUS_ARCH_EXTENDS
-#define HL5280_DEVICE_REG_VALUE 0x49
-#define DIO4480_DEVICE_REG_VALUE 0xF1
-#define INVALID_DEVICE_REG_VALUE 0x00
-
-#define FSA4480_DEVICE_ID       0x00
-#endif /* OPLUS_ARCH_EXTENDS */
 #define FSA4480_SWITCH_SETTINGS 0x04
 #define FSA4480_SWITCH_CONTROL  0x05
 #ifdef OPLUS_ARCH_EXTENDS
@@ -73,20 +60,6 @@
 #define dev_dbg dev_info
 #endif /* OPLUS_ARCH_EXTENDS */
 
-#ifdef OPLUS_ARCH_EXTENDS
-enum switch_vendor {
-    FSA4480 = 0,
-    HL5280,
-    DIO4480
-};
-
-#if IS_ENABLED(CONFIG_TCPC_CLASS)
-static int probe_retry = 0;
-#endif
-
-static int chipid_read_retry = 0;
-#endif /* OPLUS_ARCH_EXTENDS */
-
 struct fsa4480_priv {
 	struct regmap *regmap;
 	struct device *dev;
@@ -98,11 +71,6 @@ struct fsa4480_priv {
 	#ifdef OPLUS_ARCH_EXTENDS
 	unsigned int hs_det_pin;
 	#endif /* OPLUS_ARCH_EXTENDS */
-
-	#ifdef OPLUS_ARCH_EXTENDS
-	enum switch_vendor vendor;
-	unsigned int usb_protocal;
-	#endif
 };
 
 struct fsa4480_reg_val {
@@ -136,25 +104,6 @@ static const struct fsa4480_reg_val fsa_reg_i2c_defaults[] = {
 	{FSA4480_SWITCH_SETTINGS, 0x98},
 };
 
-#ifdef OPLUS_ARCH_EXTENDS
-int fsa4480_get_chip_vendor(struct device_node *node)
-{
-	struct i2c_client *client = of_find_i2c_device_by_node(node);
-	struct fsa4480_priv *fsa_priv;
-
-	if (!client)
-		return -EINVAL;
-
-	fsa_priv = (struct fsa4480_priv *)i2c_get_clientdata(client);
-	if (!fsa_priv)
-		return -EINVAL;
-
-
-	return fsa_priv->vendor;
-}
-EXPORT_SYMBOL(fsa4480_get_chip_vendor);
-#endif
-
 static void fsa4480_usbc_update_settings(struct fsa4480_priv *fsa_priv,
 		u32 switch_control, u32 switch_enable)
 {
@@ -173,14 +122,6 @@ static void fsa4480_usbc_update_settings(struct fsa4480_priv *fsa_priv,
 	}
 
 	regmap_write(fsa_priv->regmap, FSA4480_SWITCH_SETTINGS, 0x80);
-
-#ifdef OPLUS_ARCH_EXTENDS
-	if(fsa_priv->vendor == DIO4480) {
-		regmap_write(fsa_priv->regmap, FSA4480_RESET, 0x01);//reset DIO4480
-		usleep_range(1000, 1005);
-	}
-#endif
-
 	regmap_write(fsa_priv->regmap, FSA4480_SWITCH_CONTROL, switch_control);
 	/* FSA4480 chip hardware requirement */
 	usleep_range(50, 55);
@@ -196,16 +137,7 @@ static int fsa4480_usbc_event_changed(struct notifier_block *nb,
 	struct fsa4480_priv *fsa_priv =
 			container_of(nb, struct fsa4480_priv, ucsi_nb);
 	struct device *dev;
-#ifndef OPLUS_ARCH_EXTENDS
 	enum typec_accessory acc = ((struct ucsi_glink_constat_info *)ptr)->acc;
-#else
-#if IS_ENABLED(CONFIG_TCPC_CLASS)
-	struct tcp_notify *noti = ptr;
-	int old_state = TYPEC_UNATTACHED;
-	int new_state = TYPEC_UNATTACHED;
-#endif
-	enum typec_accessory acc = TYPEC_ACCESSORY_NONE;
-#endif /* OPLUS_ARCH_EXTENDS */
 
 	if (!fsa_priv)
 		return -EINVAL;
@@ -214,54 +146,9 @@ static int fsa4480_usbc_event_changed(struct notifier_block *nb,
 	if (!dev)
 		return -EINVAL;
 
-#ifdef OPLUS_ARCH_EXTENDS
-	if (fsa_priv->usb_protocal != 1) {
-		acc = ((struct ucsi_glink_constat_info *)ptr)->acc;
-	}
-#endif /* OPLUS_ARCH_EXTENDS */
-
-#ifndef OPLUS_ARCH_EXTENDS
 	dev_dbg(dev, "%s: USB change event received, supply mode %d, usbc mode %ld, expected %d\n",
 			__func__, acc, fsa_priv->usbc_mode.counter,
 			TYPEC_ACCESSORY_AUDIO);
-#else
-	if (fsa_priv->usb_protocal == 1) {
-#if IS_ENABLED(CONFIG_TCPC_CLASS)
-		dev_err(dev, "%s: USB change event received, new_state:%d, old_state:%d\n",
-				__func__, noti->typec_state.new_state, noti->typec_state.old_state);
-#endif
-	} else {
-		dev_err(dev, "%s: USB change event received, supply mode %d, usbc mode %ld, expected %d\n",
-				__func__, acc, fsa_priv->usbc_mode.counter,
-				TYPEC_ACCESSORY_AUDIO);
-	}
-#endif /* OPLUS_ARCH_EXTENDS */
-
-#ifdef OPLUS_ARCH_EXTENDS
-	if (fsa_priv->usb_protocal == 1) {
-#if IS_ENABLED(CONFIG_TCPC_CLASS)
-		switch (evt) {
-		case TCP_NOTIFY_TYPEC_STATE:
-			old_state = noti->typec_state.old_state;
-			new_state = noti->typec_state.new_state;
-			if (old_state == TYPEC_UNATTACHED &&
-			    new_state == TYPEC_ATTACHED_AUDIO) {
-				dev_err(dev, "Audio plug in\n");
-				/* enable AudioAccessory connection */
-				acc = TYPEC_ACCESSORY_AUDIO;
-			} else if (old_state == TYPEC_ATTACHED_AUDIO &&
-				   new_state == TYPEC_UNATTACHED) {
-				dev_err(dev, "Audio plug out\n");
-				/* disable AudioAccessory connection */
-				acc = TYPEC_ACCESSORY_NONE;
-			}
-			break;
-		default:
-			return 0;
-		}
-#endif
-	}
-#endif /* OPLUS_ARCH_EXTENDS */
 
 	switch (acc) {
 	case TYPEC_ACCESSORY_AUDIO:
@@ -316,21 +203,20 @@ static int fsa4480_usbc_analog_setup_switches(struct fsa4480_priv *fsa_priv)
 		fsa4480_usbc_update_settings(fsa_priv, 0x00, 0x9F);
 
 		#ifdef OPLUS_ARCH_EXTENDS
-		if(fsa_priv->vendor != DIO4480) {
-			usleep_range(1000, 1005);
-			regmap_write(fsa_priv->regmap, FSA4480_FUN_EN, 0x45);
-			usleep_range(4000, 4005);
-			dev_info(dev, "%s: set reg[0x%x] done.\n", __func__, FSA4480_FUN_EN);
+		usleep_range(1000, 1005);
+		regmap_write(fsa_priv->regmap, FSA4480_FUN_EN, 0x45);
+		usleep_range(4000, 4005);
+		dev_info(dev, "%s: set reg[0x%x] done.\n", __func__, FSA4480_FUN_EN);
 
-			regmap_read(fsa_priv->regmap, FSA4480_JACK_STATUS, &jack_status);
-			dev_info(dev, "%s: reg[0x%x]=0x%x.\n", __func__, FSA4480_JACK_STATUS, jack_status);
-			if (jack_status & 0x2) {
-				//for 3 pole, mic switch to SBU2
-				dev_info(dev, "%s: set mic to sbu2 for 3 pole.\n", __func__);
-				fsa4480_usbc_update_settings(fsa_priv, 0x00, 0x9F);
-				usleep_range(4000, 4005);
-			}
+		regmap_read(fsa_priv->regmap, FSA4480_JACK_STATUS, &jack_status);
+		dev_info(dev, "%s: reg[0x%x]=0x%x.\n", __func__, FSA4480_JACK_STATUS, jack_status);
+		if (jack_status & 0x2) {
+			//for 3 pole, mic switch to SBU2
+			dev_info(dev, "%s: set mic to sbu2 for 3 pole.\n", __func__);
+			fsa4480_usbc_update_settings(fsa_priv, 0x00, 0x9F);
+			usleep_range(4000, 4005);
 		}
+
 		regmap_read(fsa_priv->regmap, FSA4480_SWITCH_STATUS0, &switch_status);
 		dev_info(dev, "%s: reg[0x%x]=0x%x.\n", __func__, FSA4480_SWITCH_STATUS0, switch_status);
 		regmap_read(fsa_priv->regmap, FSA4480_SWITCH_STATUS1, &switch_status);
@@ -372,40 +258,6 @@ static int fsa4480_usbc_analog_setup_switches(struct fsa4480_priv *fsa_priv)
 	mutex_unlock(&fsa_priv->notification_lock);
 	return rc;
 }
-
-#ifdef OPLUS_ARCH_EXTENDS
-int fsa4480_check_cross_conn(struct device_node *node)
-{
-	int ret = 0;
-	struct i2c_client *client = of_find_i2c_device_by_node(node);
-	struct fsa4480_priv *fsa_priv;
-
-	if (!client)
-		return -EINVAL;
-
-	fsa_priv = (struct fsa4480_priv *)i2c_get_clientdata(client);
-	if (!fsa_priv)
-		return -EINVAL;
-
-	dev_dbg(fsa_priv->dev, "%s: registered vendor for %d\n",
-		__func__, fsa_priv->vendor);
-
-	switch (fsa_priv->vendor) {
-	case FSA4480:
-	case HL5280:
-	    ret = 0;
-	    break;
-	case DIO4480:
-	    ret = 1;
-	    break;
-	default:
-		break;
-	}
-
-	return ret;
-}
-EXPORT_SYMBOL(fsa4480_check_cross_conn);
-#endif /* OPLUS_ARCH_EXTENDS */
 
 /*
  * fsa4480_reg_notifier - register notifier block with fsa driver
@@ -551,15 +403,6 @@ int fsa4480_switch_event(struct device_node *node,
 			switch_control = 0x7;
 		fsa4480_usbc_update_settings(fsa_priv, switch_control, 0x9F);
 		break;
-
-	#ifdef OPLUS_ARCH_EXTENDS
-	case FSA_CONNECT_LR:
-		usleep_range(50, 55);
-		regmap_write(fsa_priv->regmap, FSA4480_SWITCH_SETTINGS, 0x9F);
-		pr_info("%s - panzhao connect LR  \n", __func__);
-		break;
-	#endif /* OPLUS_ARCH_EXTENDS */
-
 	case FSA_USBC_ORIENTATION_CC1:
 		fsa4480_usbc_update_settings(fsa_priv, 0x18, 0xF8);
 		return fsa4480_validate_display_port_settings(fsa_priv);
@@ -582,9 +425,7 @@ static int fsa4480_parse_dt(struct fsa4480_priv *fsa_priv,
 	struct device *dev)
 {
 	struct device_node *dNode = dev->of_node;
-	const char *usb_protocal_name = "fsa4480,use-3rd-usb-protocal";
 	int ret = 0;
-	int rc = 0;
 
 	if (dNode == NULL)
 		return -ENODEV;
@@ -607,12 +448,6 @@ static int fsa4480_parse_dt(struct fsa4480_priv *fsa_priv,
 	}
 
 	gpio_direction_output(fsa_priv->hs_det_pin, 1);
-
-	rc = of_property_read_u32(dNode, usb_protocal_name, &fsa_priv->usb_protocal);
-	if (rc) {
-		pr_info("%s: %s in dt node is missing\n", __func__, usb_protocal_name);
-		fsa_priv->usb_protocal = 0;
-	}
 
 	return ret;
 }
@@ -645,16 +480,6 @@ static int fsa4480_probe(struct i2c_client *i2c,
 {
 	struct fsa4480_priv *fsa_priv;
 	int rc = 0;
-#ifdef OPLUS_ARCH_EXTENDS
-	unsigned int reg_value = 0;
-#if IS_ENABLED(CONFIG_TCPC_CLASS)
-	struct tcpc_device *tcpc;
-#endif
-#endif /* OPLUS_ARCH_EXTENDS */
-
-	#ifdef OPLUS_ARCH_EXTENDS
-	pr_err("%s: enter\n", __func__);
-	#endif /* OPLUS_ARCH_EXTENDS */
 
 
 	#ifdef OPLUS_ARCH_EXTENDS
@@ -684,81 +509,17 @@ static int fsa4480_probe(struct i2c_client *i2c,
 		goto err_data;
 	}
 
-	#ifdef OPLUS_ARCH_EXTENDS
-	regmap_read(fsa_priv->regmap, FSA4480_DEVICE_ID, &reg_value);
-	dev_info(fsa_priv->dev, "%s: device id reg value: 0x%x\n", __func__, reg_value);
-	if (reg_value == HL5280_DEVICE_REG_VALUE) {
-		dev_info(fsa_priv->dev, "%s: switch chip is HL5280\n", __func__);
-		fsa_priv->vendor = HL5280;
-	} else if (reg_value == DIO4480_DEVICE_REG_VALUE) {
-		dev_info(fsa_priv->dev, "%s: switch chip is DIO4480\n", __func__);
-		fsa_priv->vendor = DIO4480;
-	} else if (reg_value == INVALID_DEVICE_REG_VALUE && chipid_read_retry < 5) {
-		dev_info(fsa_priv->dev, "%s: incorrect chip ID [0x%x]\n", __func__, reg_value);
-		chipid_read_retry++;
-		usleep_range(1*1000, 1*1005);
-		rc = -EPROBE_DEFER;
-		goto err_data;
-	} else {
-		dev_info(fsa_priv->dev, "%s: switch chip is FSA4480\n", __func__);
-		fsa_priv->vendor = FSA4480;
-	}
-
-	if (fsa_priv->vendor != DIO4480) {
-		fsa4480_update_reg_defaults(fsa_priv->regmap);
-	} else {
-		regmap_write(fsa_priv->regmap, FSA4480_RESET, 0x01);//reset DIO4480
-		usleep_range(1*1000, 1*1005);
-	}
-	#endif /* OPLUS_ARCH_EXTENDS */
+	fsa4480_update_reg_defaults(fsa_priv->regmap);
+	devm_regmap_qti_debugfs_register(fsa_priv->dev, fsa_priv->regmap);
 
 	fsa_priv->ucsi_nb.notifier_call = fsa4480_usbc_event_changed;
 	fsa_priv->ucsi_nb.priority = 0;
-#ifndef OPLUS_ARCH_EXTENDS
 	rc = register_ucsi_glink_notifier(&fsa_priv->ucsi_nb);
 	if (rc) {
 		dev_err(fsa_priv->dev, "%s: ucsi glink notifier registration failed: %d\n",
 			__func__, rc);
 		goto err_data;
 	}
-#else
-	if (fsa_priv->usb_protocal != 1) {
-		rc = register_ucsi_glink_notifier(&fsa_priv->ucsi_nb);
-		if (rc) {
-			dev_err(fsa_priv->dev, "%s: ucsi glink notifier registration failed: %d\n",
-				__func__, rc);
-			goto err_data;
-		}
-	} else {
-#if IS_ENABLED(CONFIG_TCPC_CLASS)
-		dev_err(fsa_priv->dev, "%s: start register 3rd protocal stack notifier\n", __func__);
-		tcpc = tcpc_dev_get_by_name("type_c_port0");
-		if (!tcpc) {
-			if (probe_retry > 60) {
-				dev_err(fsa_priv->dev, "%s: get tcpc failed, jump tcp register\n", __func__);
-				rc = 0;
-				goto tcp_register_finish;
-			} else {
-				probe_retry++;
-				dev_err(fsa_priv->dev, "%s: get tcpc failed, retry:%d \n", __func__, probe_retry);
-				usleep_range(1*1000, 1*1005);
-				rc = -EPROBE_DEFER;
-				goto err_data;
-			}
-		}
-		rc = register_tcp_dev_notifier(tcpc, &fsa_priv->ucsi_nb, TCP_NOTIFY_TYPE_USB);
-		if (rc) {
-			dev_err(fsa_priv->dev, "%s: ucsi glink notifier registration failed: %d\n",
-				__func__, rc);
-			goto err_data;
-		}
-#endif
-	}
-
-#if IS_ENABLED(CONFIG_TCPC_CLASS)
-tcp_register_finish:
-#endif
-#endif /* OPLUS_ARCH_EXTENDS */
 
 	mutex_init(&fsa_priv->notification_lock);
 	i2c_set_clientdata(i2c, fsa_priv);
@@ -768,17 +529,9 @@ tcp_register_finish:
 
 	BLOCKING_INIT_NOTIFIER_HEAD(&fsa_priv->fsa4480_notifier);
 
-#ifdef OPLUS_ARCH_EXTENDS
-	pr_err("%s: finished\n", __func__);
-#endif /* OPLUS_ARCH_EXTENDS */
-
 	return 0;
 
 err_data:
-#ifdef OPLUS_ARCH_EXTENDS
-	pr_err("%s: finished since err\n", __func__);
-#endif /* OPLUS_ARCH_EXTENDS */
-
 	#ifdef OPLUS_ARCH_EXTENDS
 	if (gpio_is_valid(fsa_priv->hs_det_pin)) {
 		gpio_free(fsa_priv->hs_det_pin);
@@ -823,11 +576,6 @@ static void fsa4480_shutdown(struct i2c_client *i2c) {
 
 	pr_info("%s: recover all register while shutdown\n", __func__);
 
-	if (fsa_priv->vendor == DIO4480) {
-		regmap_write(fsa_priv->regmap, FSA4480_RESET, 0x01);//reset DIO4480
-		return;
-	}
-
 	fsa4480_update_reg_defaults(fsa_priv->regmap);
 
 	return;
@@ -858,9 +606,6 @@ static int __init fsa4480_init(void)
 {
 	int rc;
 
-#ifdef OPLUS_ARCH_EXTENDS
-	pr_info("%s(): enter\n", __func__);
-#endif /* OPLUS_ARCH_EXTENDS */
 	rc = i2c_add_driver(&fsa4480_i2c_driver);
 	if (rc)
 		pr_err("fsa4480: Failed to register I2C driver: %d\n", rc);

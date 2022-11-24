@@ -19,7 +19,6 @@
 
 #include <linux/soc/qcom/smem.h>
 #include <soc/qcom/soc_sleep_stats.h>
-#include <soc/oplus/system/boot_mode.h>
 #include <clocksource/arm_arch_timer.h>
 
 #define STAT_TYPE_ADDR		0x0
@@ -596,10 +595,6 @@ static ssize_t oplus_rpmh_master_stats_show(struct kobject *kobj,
 	for (i = 0; i < n_subsystems; i++) {
 		of_property_read_string_index(node, "ss-name", i, &name);
 
-		if ((get_boot_mode() == MSM_BOOT_MODE__FACTORY) && !strcmp(name, "wpss")){
-			pr_err("ftm: i=%d, ignore wpss stats\n", i);
-			continue;
-		}
 
 		for (j = 0; j < ARRAY_SIZE(subsystems); j++) {
 			if (!strcmp(subsystems[j].name, name)) {

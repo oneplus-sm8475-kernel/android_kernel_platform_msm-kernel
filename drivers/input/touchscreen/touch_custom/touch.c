@@ -62,15 +62,23 @@ TP_USED_INDEX tp_used_index  = TP_INDEX_NULL;
 bool tp_judge_ic_match(char *tp_ic_name)
 {
 	pr_err("[TP] tp_ic_name = %s \n", tp_ic_name);
-	pr_err("[TP] tp_dsi_display_primary = %s \n", tp_dsi_display_primary);
+	pr_err("[TP] tp_dsi_display_primary   = %s \n", tp_dsi_display_primary);
+	pr_err("[TP] tp_dsi_display_secondary = %s \n", tp_dsi_display_secondary);
 
-	if (strstr(tp_dsi_display_primary, tp_ic_name) || (strstr("focaltech,ft3658u", tp_ic_name))) {
-		pr_err("[TP] tp_judge_ic_match match ok\n");
-		return true;
+	if (strstr(tp_dsi_display_primary, tp_ic_name)) {
+		pr_err("[TP] primary disp match ok\n");
+		goto OK;
 	}
-	pr_err("[TP] tp_judge_ic_match not match ok\n");
-	return false;
 
+	if (strstr(tp_dsi_display_secondary, tp_ic_name)) {
+		pr_err("[TP] secondary disp match ok\n");
+		goto OK;
+	}
+
+	pr_err("[TP] tp ic not match disp!!\n");
+	return false;
+OK:
+	return true;
 }
 EXPORT_SYMBOL(tp_judge_ic_match);
 
@@ -80,18 +88,20 @@ int tp_judge_ic_match_commandline(struct panel_info *panel_data)
 	int i = 0;
 	prj_id = get_project();
 
-	pr_err("[TP] tp_dsi_display_primary = %s \n", tp_dsi_display_primary);
+	pr_err("[TP] start match cmdline\n");
 	for(i = 0; i < panel_data->project_num; i++) {
 		if(prj_id == panel_data->platform_support_project[i]) {
 			g_tp_prj_id = panel_data->platform_support_project_dir[i];
 			pr_err("[TP] Driver match support project [%d]\n", panel_data->platform_support_project[i]);
 
 			for(j = 0; j < panel_data->panel_num; j++) {
-				if(strstr(tp_dsi_display_primary, panel_data->platform_support_commandline[j]) || strstr("default_commandline", panel_data->platform_support_commandline[j])) {
+				if(strstr(tp_dsi_display_primary,   panel_data->platform_support_commandline[j]) \
+				|| strstr(tp_dsi_display_secondary, panel_data->platform_support_commandline[j]) \
+					|| strstr("default_commandline", panel_data->platform_support_commandline[j])) {
 					panel_data->tp_type = panel_data->panel_type[j];
 					if(panel_data->chip_num > 1) {
 						chip_name = panel_data->chip_name[j];
-						pr_err("[TP] WGL--1 chip_name = %s, panel_data->chip_name = %s", chip_name, panel_data->chip_name[j]);
+						pr_err("[TP] chip_name = %s, panel_data->chip_name = %s", chip_name, panel_data->chip_name[j]);
 					}
 					pr_err("[TP] match panel type OK , panel type is [%d]\n", panel_data->tp_type);
 					return j;
@@ -169,13 +179,17 @@ void display_esd_check_enable_bytouchpanel(bool enable)
 EXPORT_SYMBOL(display_esd_check_enable_bytouchpanel);
 
 
+/* primary display */
 module_param_string(dsi_display0, tp_dsi_display_primary, MAX_CMDLINE_PARAM_LEN,
                                         0600);
 MODULE_PARM_DESC(dsi_display0,
 	"oplus_bsp_tp_custom.dsi_display0=<display node> for primary dsi display node name");
+
+/* secondary display */
 module_param_string(dsi_display1, tp_dsi_display_secondary, MAX_CMDLINE_PARAM_LEN,
                                         0600);
 MODULE_PARM_DESC(dsi_display1,
 	"oplus_bsp_tp_custom.dsi_display1=<display node> for secondary dsi display node name");
+
 MODULE_DESCRIPTION("Touchscreen Driver");
 MODULE_LICENSE("GPL");

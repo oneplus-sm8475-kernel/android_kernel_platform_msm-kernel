@@ -19,7 +19,6 @@ typedef enum{
     NQ330,
     SN100T,
     SN100F,
-    SN110T,
     ST21H,
     ST54H,
     PN557

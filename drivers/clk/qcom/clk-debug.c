@@ -28,7 +28,9 @@
 
 static struct clk_hw *measure;
 static bool debug_suspend;
+static bool debug_suspend_atomic;
 static struct dentry *clk_debugfs_suspend;
+static struct dentry *clk_debugfs_suspend_atomic;
 
 #ifdef CONFIG_OPLUS_POWERINFO_STANDBY_DEBUG
 static unsigned int debug_suspend_flag = 1;
@@ -821,7 +823,8 @@ static int clock_debug_print_clock(struct hw_debug_clk *dclk, struct seq_file *s
 	struct clk_hw *clk_hw;
 	unsigned long clk_rate;
 	bool clk_prepared, clk_enabled;
-	int vdd_level;
+	int vdd_level = 0;
+	bool atomic;
 
 	if (!dclk || !dclk->clk_hw) {
 		pr_err("clk param error\n");
@@ -835,13 +838,23 @@ static int clock_debug_print_clock(struct hw_debug_clk *dclk, struct seq_file *s
 
 	clk = dclk->clk_hw->clk;
 
+	/*
+	 * In order to prevent running into "scheduling while atomic"
+	 * due to grabbing contested mutexes, avoid making any calls
+	 * that grab a mutex in the debug_suspend path when the
+	 * variable atomic is true.
+	 */
+	atomic = debug_suspend_atomic && !s;
+
 	do {
 		clk_hw = __clk_get_hw(clk);
 		if (!clk_hw)
 			break;
 
 		clk_rate = clk_hw_get_rate(clk_hw);
-		vdd_level = clk_list_rate_vdd_level(clk_hw, clk_rate);
+
+		if (!atomic)
+			vdd_level = clk_list_rate_vdd_level(clk_hw, clk_rate);
 
 		if (s) {
 			/*
@@ -879,6 +892,9 @@ static int clock_debug_print_clock(struct hw_debug_clk *dclk, struct seq_file *s
 				clk_hw_get_name(clk_hw),
 				clk_rate);
 		}
+
+		if (atomic)
+			break;
 
 		start = " -> ";
 
@@ -1023,6 +1039,24 @@ static int clk_debug_suspend_enable_set(void *data, u64 val)
 DEFINE_DEBUGFS_ATTRIBUTE(clk_debug_suspend_enable_fops,
 	clk_debug_suspend_enable_get, clk_debug_suspend_enable_set, "%llu\n");
 
+
+static int clk_debug_suspend_atomic_enable_get(void *data, u64 *val)
+{
+	*val = debug_suspend_atomic;
+
+	return 0;
+}
+
+static int clk_debug_suspend_atomic_enable_set(void *data, u64 val)
+{
+	debug_suspend_atomic = !!val;
+
+	return 0;
+}
+
+DEFINE_DEBUGFS_ATTRIBUTE(clk_debug_suspend_atomic_enable_fops,
+	clk_debug_suspend_atomic_enable_get, clk_debug_suspend_atomic_enable_set, "%llu\n");
+
 static void clk_hw_debug_remove(struct hw_debug_clk *dclk)
 {
 	if (dclk) {
@@ -1151,6 +1185,11 @@ int clk_debug_init(void)
 	clk_debugfs_suspend = debugfs_create_file_unsafe("debug_suspend",
 						0644, rootdir, NULL,
 						&clk_debug_suspend_enable_fops);
+
+	clk_debugfs_suspend_atomic = debugfs_create_file_unsafe("debug_suspend_atomic",
+						0644, rootdir, NULL,
+						&clk_debug_suspend_atomic_enable_fops);
+
 	dput(rootdir);
 	if (IS_ERR(clk_debugfs_suspend)) {
 		ret = PTR_ERR(clk_debugfs_suspend);
@@ -1158,10 +1197,16 @@ int clk_debug_init(void)
 			__func__, ret);
 	}
 
+	if (IS_ERR(clk_debugfs_suspend_atomic)) {
+		ret = PTR_ERR(clk_debugfs_suspend_atomic);
+		pr_err("%s: unable to create clock debug_suspend_atomic debugfs directory, ret=%d\n",
+			__func__, ret);
+	}
+
 #ifdef CONFIG_OPLUS_POWERINFO_STANDBY_DEBUG
 	clk_proc = proc_mkdir("clk", NULL);
 	proc_create("clk_enabled_list", 0444, clk_proc, &clk_enabled_list_proc_fops);
-	proc_create("debug_suspend", 0444, clk_proc, &debug_suspend_fops);
+	proc_create("debug_suspend", 0664, clk_proc, &debug_suspend_fops);
 #endif
 
 	return ret;
@@ -1170,9 +1215,11 @@ int clk_debug_init(void)
 void clk_debug_exit(void)
 {
 	debugfs_remove(clk_debugfs_suspend);
+	debugfs_remove(clk_debugfs_suspend_atomic);
 	if (debug_suspend)
 		unregister_trace_suspend_resume(
 				clk_debug_suspend_trace_probe, NULL);
+
 	clk_debug_unregister();
 }
 

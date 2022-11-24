@@ -2483,9 +2483,6 @@ static int dwc3_gadget_pullup(struct usb_gadget *g, int is_on)
 		return 0;
 	}
 
-	/* Ensure that RPM resume has not already triggered run/stop set */
-	if (dwc->pullups_connected == is_on)
-		return 0;
 	/*
 	 * Synchronize and disable any further event handling while controller
 	 * is being enabled/disabled.

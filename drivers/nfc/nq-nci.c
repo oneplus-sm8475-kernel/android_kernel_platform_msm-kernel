@@ -1655,9 +1655,7 @@ static int nqx_probe(struct i2c_client *client,
 	struct nqx_platform_data *platform_data;
 	struct nqx_dev *nqx_dev;
 
-	//#ifdef OPLUS_FEATURE_CONNFCSOFT
 	CHECK_NFC_CHIP(SN100T);
-	//#endif /* OPLUS_FEATURE_CONNFCSOFT */
 
 	dev_dbg(&client->dev, "%s: enter\n", __func__);
 	if (client->dev.of_node) {

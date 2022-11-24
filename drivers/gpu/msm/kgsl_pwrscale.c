@@ -254,8 +254,8 @@ int kgsl_devfreq_target(struct device *dev, unsigned long *freq, u32 flags)
 		if (!pwrscale->enabled)
 			return 0;
 		return -EPROTO;
-	}
 
+	}
 	pwr = &device->pwrctrl;
 
 	if (_check_maxfreq(flags)) {

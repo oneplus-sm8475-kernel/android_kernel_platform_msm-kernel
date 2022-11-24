@@ -733,10 +733,8 @@ static int qti_flash_switch_enable(struct flash_switch_data *snode)
 		rc = qti_flash_lmh_mitigation_config(led, true);
 		if (rc < 0)
 			return rc;
-
-	/* Wait for lmh mitigation to take effect */
-	udelay(500);
-
+		/* Wait for lmh mitigation to take effect */
+		udelay(500);
 	} else if (led->trigger_lmh) {
 		rc = qti_flash_lmh_mitigation_config(led, false);
 		if (rc < 0)

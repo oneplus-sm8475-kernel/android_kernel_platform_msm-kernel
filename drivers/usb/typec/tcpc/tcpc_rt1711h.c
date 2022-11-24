@@ -1074,6 +1074,16 @@ static int rt1711_set_cc(struct tcpc_device *tcpc, int pull)
 				else
 					pull2 = TYPEC_CC_OPEN;
 			}
+		} else {
+			if ((pull == TYPEC_CC_RP_DFT ||
+			     pull == TYPEC_CC_RP_1_5 ||
+			     pull == TYPEC_CC_RP_3_0) &&
+			    tcpc->typec_is_attached_src) {
+				if (tcpc->typec_polarity)
+					pull1 = TYPEC_CC_OPEN;
+				else
+					pull2 = TYPEC_CC_OPEN;
+			}
 		}
 		data = TCPC_V10_REG_ROLE_CTRL_RES_SET(0, rp_lvl, pull1, pull2);
 		if (chip->chip_id != SC2150A_DID || old_data != data)

@@ -127,7 +127,61 @@ static int gf_opticalfp_irq_handler(struct fp_underscreen_info *tp_info);
 static void fp_panel_notifier_callback(enum panel_event_notifier_tag tag,
 				       struct panel_event_notification *event,
 				       void *client_data);
+static int fp_check_panel_dt(struct gf_dev *gf_dev);
 #endif
+
+static int fp_panel_event_notifier_register(struct gf_dev *gf_dev)
+#if IS_ENABLED(CONFIG_DRM_PANEL_NOTIFY_FINGERPRINT)
+{
+	int status = 0;
+	void *cookie = NULL;
+	unsigned int check_panel_retry = 0;
+
+	if (gf_dev->is_panel_registered) {
+		pr_info("%s, panel is registered.\n", __func__);
+		return 0;
+	}
+
+	gf_dev->active_panel = NULL;
+	gf_dev->notifier_cookie = NULL;
+	while (fp_check_panel_dt(gf_dev) < 0) {
+		/* retry in count, then break */
+		if (check_panel_retry >= 100) {
+			pr_err("%s, out of check_panel_retry.\n", __func__);
+			status = -1;
+			break;
+		}
+		check_panel_retry++;
+		/* retry per ms */
+		msleep(200);
+	}
+	/* panel notification register */
+	pr_info("%s, check_panel retry = %u\n", __func__, check_panel_retry);
+	if (gf_dev->active_panel) {
+		cookie = panel_event_notifier_register(
+			PANEL_EVENT_NOTIFICATION_PRIMARY,
+			PANEL_EVENT_NOTIFIER_CLIENT_PRIMARY_ONSCREENFINGERPRINT,
+			gf_dev->active_panel, &fp_panel_notifier_callback,
+			gf_dev);
+
+		if (IS_ERR(cookie)) {
+			status = -1;
+			pr_err("%s panel_event_notifier_register err = %d!\n",
+			       __func__, PTR_ERR(cookie));
+		}
+		gf_dev->notifier_cookie = cookie;
+		pr_err("%s notifier_cookie = %d!\n", __func__, cookie);
+	}
+
+	if (0 == status) {
+		gf_dev->is_panel_registered = true;
+	}
+	return status;
+#else
+	pr_err("%s, implement empty.\n", __func__);
+	return 0;
+#endif
+}
 
 static void gf_enable_irq(struct gf_dev *gf_dev)
 {
@@ -421,7 +475,7 @@ static long gf_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
         }
     }
 
-    switch (cmd) {
+	switch (cmd) {
         case GF_IOC_INIT:
             pr_debug("%s GF_IOC_INIT\n", __func__);
             if (copy_to_user((void __user *)arg, (void *)&netlink_route, sizeof(u8))) {
@@ -529,6 +583,10 @@ static long gf_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
             pr_info("%s GF_IOC_AUTO_SEND_TOUCHUP\n", __func__);
             gf_auto_send_touchup();
             break;
+	case GF_IOC_REGISTER_PANEL_NOTIFIER:
+		pr_info("%s GF_IOC_REGISTER_PANEL_NOTIFIER\n", __func__);
+		retval = fp_panel_event_notifier_register(gf_dev);
+		break;
         default:
             pr_warn("unsupport cmd:0x%x\n", cmd);
             break;
@@ -576,6 +634,10 @@ static int gf_open(struct inode *inode, struct file *filp)
                 if (status)
                     goto err_irq;
             }
+		status = fp_panel_event_notifier_register(gf_dev);
+		if (status) {
+			goto err_panel;
+		}
         }
     } else {
         pr_info("No device for minor %d\n", iminor(inode));
@@ -586,6 +648,7 @@ static int gf_open(struct inode *inode, struct file *filp)
 err_irq:
     gf_cleanup(gf_dev);
 err_parse_dt:
+err_panel:
     return status;
 }
 
@@ -825,10 +888,7 @@ static int gf_probe(struct platform_device *pdev)
     unsigned long minor;
     int boot_mode = 0;
     int i;
-#if IS_ENABLED(CONFIG_DRM_PANEL_NOTIFY_FINGERPRINT)
-	void *cookie = NULL;
-	unsigned int check_panel_retry = 0;
-#endif
+
     /* Initialize the driver data */
     INIT_LIST_HEAD(&gf_dev->device_entry);
 #if defined(USE_SPI_BUS)
@@ -841,6 +901,8 @@ static int gf_probe(struct platform_device *pdev)
     gf_dev->pwr_gpio = -EINVAL;
     gf_dev->device_available = 0;
     gf_dev->fb_black = 0;
+
+	pr_err("enter g_fp probe\n");
 
     /* If we can allocate a minor number, hook up this device.
      * Reusing minors is fine so long as udev or mdev is working.
@@ -938,38 +1000,6 @@ static int gf_probe(struct platform_device *pdev)
         }
     }
 
-#if IS_ENABLED(CONFIG_DRM_PANEL_NOTIFY_FINGERPRINT)
-	gf_dev->active_panel = NULL;
-	gf_dev->notifier_cookie = NULL;
-	while (fp_check_panel_dt(gf_dev) < 0) {
-		/* retry in 20sec, then break */
-		if (check_panel_retry >= 100) {
-			pr_err("%s, NO avalibel display panel and out retry!!!\n",
-			       __func__);
-			break;
-		}
-		check_panel_retry++;
-		/* retry per 200ms */
-		msleep(200);
-	}
-	/* panel notification register */
-	pr_info("%s, check_panel retry = %u\n", __func__, check_panel_retry);
-	if (gf_dev->active_panel) {
-		cookie = panel_event_notifier_register(
-			PANEL_EVENT_NOTIFICATION_PRIMARY,
-			PANEL_EVENT_NOTIFIER_CLIENT_PRIMARY_ONSCREENFINGERPRINT,
-			gf_dev->active_panel, &fp_panel_notifier_callback,
-			gf_dev);
-
-		if (IS_ERR(cookie)) {
-			pr_err("%s panel_event_notifier_register err = %d!\n",
-			       __func__, PTR_ERR(cookie));
-		}
-		gf_dev->notifier_cookie = cookie;
-		pr_info("%s notifier_cookie = %d!\n", __func__, cookie);
-	}
-#endif
-
     return status;
 
 #ifdef AP_CONTROL_CLK
@@ -1017,6 +1047,7 @@ static int gf_remove(struct platform_device *pdev)
 #if IS_ENABLED(CONFIG_DRM_PANEL_NOTIFY_FINGERPRINT)
 	if (NULL != gf_dev->notifier_cookie && !IS_ERR(gf_dev->notifier_cookie)) {
 		panel_event_notifier_unregister(gf_dev->notifier_cookie);
+		gf_dev->is_panel_registered = false;
 	}
 #endif
     if (gf_dev->input)
@@ -1054,7 +1085,7 @@ static struct platform_driver gf_driver = {
 
 static int __init gf_init(void)
 {
-	int status = 0;
+    int status;
     /* Claim our 256 reserved device numbers.  Then register a class
      * that will key udev/mdev to add/remove /dev nodes.  Last, register
      * the driver which manages those device numbers.
@@ -1064,9 +1095,10 @@ static int __init gf_init(void)
             && (FP_GOODIX_5228 != get_fpsensor_type())
             && (FP_GOODIX_5658 != get_fpsensor_type())
             && (FP_GOODIX_OPTICAL_95 != get_fpsensor_type())
-            && (FP_GOODIX_3626 != get_fpsensor_type())) {
+			&& (FP_GOODIX_3626 != get_fpsensor_type())
+			&& (FP_GOODIX_3956 != get_fpsensor_type())) {
         pr_err("%s, found not goodix sensor\n", __func__);
-        pr_err("%s, return 0 for load ko successfully\n", __func__);
+        status = -EINVAL;
         return status;
     }
 
@@ -1122,7 +1154,7 @@ static void __exit gf_exit(void)
 }
 module_exit(gf_exit);
 
-MODULE_SOFTDEP("pre: oplus_fp_common");
+MODULE_SOFTDEP("pre:oplus_fp_common");
 MODULE_AUTHOR("Jiangtao Yi, <yijiangtao@goodix.com>");
 MODULE_AUTHOR("Jandy Gou, <gouqingsong@goodix.com>");
 MODULE_DESCRIPTION("goodix fingerprint sensor device driver");

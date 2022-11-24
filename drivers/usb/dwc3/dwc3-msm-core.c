@@ -583,7 +583,6 @@ static void dwc3_pwr_event_handler(struct dwc3_msm *mdwc);
 #ifdef OPLUS_FEATURE_CHG_BASIC
 
 static bool (*oplus_ignore_usb_notify)(void);
-static int dwc3_msm_set_role(struct dwc3_msm *mdwc, enum usb_role role);
 void oplus_dwc3_config_usbphy_pfunc(bool (*pfunc)(void))
 {
 	oplus_ignore_usb_notify = pfunc;
@@ -610,7 +609,6 @@ static bool oplus_dwc3_need_set_usbphy_hz(void)
 	return ret;
 }
 #endif
-
 static int get_chg_type(struct dwc3_msm *mdwc);
 
 static inline void dwc3_msm_ep_writel(void __iomem *base, u32 offset, u32 value)
@@ -3443,14 +3441,6 @@ static void enable_usb_pdc_interrupt(struct dwc3_msm *mdwc, bool enable)
 				IRQ_TYPE_EDGE_FALLING, enable);
 
 	} else {
-		#ifdef OPLUS_FEATURE_CHG_BASIC
-		configure_usb_wakeup_interrupt(mdwc,
-			&mdwc->wakeup_irq[DP_HS_PHY_IRQ],
-			 IRQF_TRIGGER_HIGH | IRQ_TYPE_LEVEL_HIGH, true);
-		configure_usb_wakeup_interrupt(mdwc,
-			&mdwc->wakeup_irq[DM_HS_PHY_IRQ],
-			IRQF_TRIGGER_HIGH | IRQ_TYPE_LEVEL_HIGH, true);
-		#else
 		/* When in host mode, with no device connected, set the HS
 		 * to level high triggered.  This is to ensure device connection
 		 * is seen, if device pulls up DP before the suspend routine
@@ -3466,7 +3456,6 @@ static void enable_usb_pdc_interrupt(struct dwc3_msm *mdwc, bool enable)
 			mdwc->in_host_mode ?
 			(IRQF_TRIGGER_HIGH | IRQ_TYPE_LEVEL_HIGH) :
 			IRQ_TYPE_EDGE_RISING, true);
-		#endif
 	}
 
 	configure_usb_wakeup_interrupt(mdwc,
@@ -4553,7 +4542,6 @@ static int dwc3_msm_set_role(struct dwc3_msm *mdwc, enum usb_role role)
 
 	mutex_lock(&mdwc->role_switch_mutex);
 
-	cur_role = dwc3_msm_get_role(mdwc);
 #ifdef OPLUS_FEATURE_CHG_BASIC
 	if (oplus_dwc3_need_set_usbphy_hz() == true && role != USB_ROLE_NONE) {
 		pr_err("!!!ignore the notify to start USB device mode");
@@ -4561,6 +4549,8 @@ static int dwc3_msm_set_role(struct dwc3_msm *mdwc, enum usb_role role)
 		return 0;
 	}
 #endif
+
+	cur_role = dwc3_msm_get_role(mdwc);
 
 	dbg_log_string("cur_role:%s new_role:%s\n", usb_role_string(cur_role),
 						usb_role_string(role));
@@ -5969,7 +5959,6 @@ static int dwc3_otg_start_peripheral(struct dwc3_msm *mdwc, int on)
 	struct dwc3 *dwc = platform_get_drvdata(mdwc->dwc3);
 	int timeout = 1000;
 	int ret;
-	u32 reg = 0;
 
 	pm_runtime_get_sync(mdwc->dev);
 	dbg_event(0xFF, "StrtGdgt gsync",
@@ -5987,16 +5976,6 @@ static int dwc3_otg_start_peripheral(struct dwc3_msm *mdwc, int on)
 		 */
 		if (dwc->dr_mode == USB_DR_MODE_OTG)
 			flush_work(&dwc->drd_work);
-
-		/*
-		 * For DRD controllers, GUSB3PIPECTL.SUSPENDENABLE must be cleared
-		 * after power-on reset, and it can be set after core
-		 * initialization. Hence, it is cleared at dwc3_phy_setup and set
-		 * here.
-		 */
-		reg = dwc3_msm_read_reg(mdwc->base, DWC3_GUSB3PIPECTL(0));
-		reg |= DWC3_GUSB3PIPECTL_SUSPHY;
-		dwc3_msm_write_reg(mdwc->base, DWC3_GUSB3PIPECTL(0), reg);
 		dwc3_msm_notify_event(dwc, DWC3_GSI_EVT_BUF_SETUP, 0);
 
 		dwc3_override_vbus_status(mdwc, true);
@@ -6420,6 +6399,11 @@ static void dwc3_core_complete(struct device *dev)
 	 * to cable status, or XHCI status to wake up the DWC3 core.
 	 */
 	dbg_event(0xFF, "Core PM complete", dev->power.direct_complete);
+
+	if (!mdwc->in_host_mode) {
+		dbg_event(0xFF, "Queue ResWrk", 0);
+		queue_work(mdwc->dwc3_wq, &mdwc->resume_work);
+	}
 }
 #endif
 

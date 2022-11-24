@@ -28,6 +28,8 @@
 #define ADRASTEA_PATH_PREFIX   "adrastea/"
 #define ICNSS_MAX_FILE_NAME      35
 #define ICNSS_PCI_EP_WAKE_OFFSET 4
+#define ICNSS_DISABLE_M3_SSR 0
+#define ICNSS_ENABLE_M3_SSR 1
 
 extern uint64_t dynamic_feature_mask;
 
@@ -59,6 +61,7 @@ enum icnss_driver_event_type {
 	ICNSS_DRIVER_EVENT_QDSS_TRACE_FREE,
 	ICNSS_DRIVER_EVENT_M3_DUMP_UPLOAD_REQ,
 	ICNSS_DRIVER_EVENT_QDSS_TRACE_REQ_DATA,
+	ICNSS_DRIVER_EVENT_SUBSYS_RESTART_LEVEL,
 	ICNSS_DRIVER_EVENT_MAX,
 };
 
@@ -185,6 +188,10 @@ enum icnss_smp2p_msg_id {
 	ICNSS_PCI_EP_POWER_SAVE_EXIT,
 };
 
+struct icnss_subsys_restart_level_data {
+	uint8_t restart_level;
+};
+
 struct icnss_stats {
 	struct {
 		uint32_t posted;
@@ -263,6 +270,9 @@ struct icnss_stats {
 	u32 soc_wake_req;
 	u32 soc_wake_resp;
 	u32 soc_wake_err;
+	u32 restart_level_req;
+	u32 restart_level_resp;
+	u32 restart_level_err;
 };
 
 #define WLFW_MAX_TIMESTAMP_LEN 32
@@ -346,6 +356,14 @@ struct icnss_ramdump_info {
 	int minor;
 	char name[32];
 	struct device *dev;
+};
+
+struct icnss_pinctrl_info {
+	struct pinctrl *pinctrl;
+	struct pinctrl_state *wlan_pon_en;
+	struct pinctrl_state *wlan_pon_dis;
+	struct pinctrl_state *wlan_poff_en;
+	struct pinctrl_state *wlan_poff_dis;
 };
 
 struct icnss_priv {
@@ -474,31 +492,22 @@ struct icnss_priv {
 	uint32_t fw_soc_wake_ack_irq;
 	char foundry_name;
 	bool bdf_download_support;
-#ifdef OPLUS_FEATURE_WIFI_DCS_SWITCH
-//Add for: check fw status for switch issue
-	unsigned long loadBdfState;
-	unsigned long loadRegdbState;
-#endif /* OPLUS_FEATURE_WIFI_DCS_SWITCH */
 	unsigned long device_config;
 	bool wpss_supported;
+	struct icnss_pinctrl_info pinctrl_info;
+	bool pon_gpio_control;
 };
-
-#ifdef OPLUS_FEATURE_WIFI_DCS_SWITCH
-//Add for: check fw status for switch issue
-enum cnss_load_state {
-	CNSS_LOAD_BDF_FAIL = 1,
-	CNSS_LOAD_BDF_SUCCESS,
-	CNSS_LOAD_REGDB_FAIL,
-	CNSS_LOAD_REGDB_SUCCESS,
-	CNSS_PROBE_FAIL,
-	CNSS_PROBE_SUCCESS,
-};
-#endif /* OPLUS_FEATURE_WIFI_DCS_SWITCH */
 
 struct icnss_reg_info {
 	uint32_t mem_type;
 	uint32_t reg_offset;
 	uint32_t data_len;
+};
+
+enum pmic_pwr_seq {
+	PMIC_PWR_OFF,
+	PMIC_PWR_ON,
+	PMIC_PWR_OFF_ON,
 };
 
 void icnss_free_qdss_mem(struct icnss_priv *priv);
@@ -520,5 +529,7 @@ int icnss_update_cpr_info(struct icnss_priv *priv);
 void icnss_add_fw_prefix_name(struct icnss_priv *priv, char *prefix_name,
 			      char *name);
 int icnss_aop_mbox_init(struct icnss_priv *priv);
+int icnss_get_pinctrl(struct icnss_priv *priv);
+int icnss_pmic_gpio_store(struct icnss_priv *priv, uint32_t gpio, bool state);
 #endif
 

@@ -104,6 +104,7 @@ struct gf_ioc_chip_info {
 #define GF_IOC_CLEAN_TOUCH_FLAG        _IO(GF_IOC_MAGIC, 20 )
 #define GF_IOC_AUTO_SEND_TOUCHDOWN        _IO(GF_IOC_MAGIC, 21 )
 #define GF_IOC_AUTO_SEND_TOUCHUP        _IO(GF_IOC_MAGIC, 22 )
+#define GF_IOC_REGISTER_PANEL_NOTIFIER _IO(GF_IOC_MAGIC, 23)
 
 #if defined(SUPPORT_NAV_EVENT)
 #define GF_IOC_NAV_EVENT	_IOW(GF_IOC_MAGIC, 14, gf_nav_event_t)
@@ -161,6 +162,7 @@ struct gf_dev {
 #if IS_ENABLED(CONFIG_DRM_PANEL_NOTIFY_FINGERPRINT)
 	struct drm_panel *active_panel;
 	void *notifier_cookie;
+	bool is_panel_registered;
 #endif
 	char device_available;
 	char fb_black;

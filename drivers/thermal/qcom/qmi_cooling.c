@@ -176,7 +176,7 @@ static int qmi_tmd_send_state_request(struct qmi_cooling_device *qmi_cdev,
 		goto qmi_send_exit;
 	}
 	ret = 0;
-	pr_err("Requested qmi state:%d for %s\n", state, qmi_cdev->cdev_name);
+	pr_debug("Requested qmi state:%d for %s\n", state, qmi_cdev->cdev_name);
 
 qmi_send_exit:
 	mutex_unlock(&tmd->mutex);
@@ -185,7 +185,7 @@ qmi_send_exit:
 
 #define BUF_LEN		256
 #define NAME_LEN	128
-#define HORAE_QMI_NUM	51
+#define HORAE_QMI_NUM	3
 
 typedef struct horae_qmi_info {
 	char name[NAME_LEN];
@@ -197,57 +197,9 @@ typedef struct horae_qmi_info {
 static bool user_mode = false;
 
 static horae_qmi_info_t horae_qmi_cdev[HORAE_QMI_NUM] = {
-	{"pa", 0, false, NULL},
-	{"pa_fr1", 0, false, NULL},
-	{"cx_vdd_limit", 0, false, NULL},
-	{"modem", 0, false, NULL},
-	{"modem_current", 0, false, NULL},
 	{"modem_skin", 0, false, NULL},
-	{"modem_bw", 0, false, NULL},
-	{"modem_bw_backoff", 0, false, NULL},
-	{"vbatt_low", 0, false, NULL},
-	{"charge_state", 0, false, NULL},
-	{"mmw0", 0, false, NULL},
-	{"mmw1", 0, false, NULL},
-	{"mmw2", 0, false, NULL},
-	{"mmw3", 0, false, NULL},
-	{"mmw_skin0", 0, false, NULL},
-	{"mmw_skin1", 0, false, NULL},
-	{"mmw_skin2", 0, false, NULL},
-	{"mmw_skin3", 0, false, NULL},
-	{"wlan", 0, false, NULL},
-	{"wlan_bw", 0, false, NULL},
-	{"mmw_skin0_dsc", 0, false, NULL},
-	{"mmw_skin1_dsc", 0, false, NULL},
-	{"mmw_skin2_dsc", 0, false, NULL},
-	{"mmw_skin3_dsc", 0, false, NULL},
-	{"modem_skin_lte_dsc", 0, false, NULL},
-	{"modem_skin_nr_dsc", 0, false, NULL},
-	{"pa_dsc", 0, false, NULL},
-	{"pa_fr1_dsc", 0, false, NULL},
-	{"cdsp_sw", 0, false, NULL},
-	{"cdsp_hw", 0, false, NULL},
-	{"cpuv_restriction_cold", 0, false, NULL},
-	{"cpr_cold", 0, false, NULL},
-	{"modem_lte_dsc", 0, false, NULL},
-	{"modem_nr_dsc", 0, false, NULL},
-	{"modem_nr_scg_dsc", 0, false, NULL},
-	{"sdr0_lte_dsc", 0, false, NULL},
-	{"sdr1_lte_dsc", 0, false, NULL},
-	{"sdr0_nr_dsc", 0, false, NULL},
-	{"sdr1_nr_dsc", 0, false, NULL},
-	{"pa_sdr0_dsc", 0, false, NULL},
-	{"pa_sdr1_dsc", 0, false, NULL},
-	{"pa_fr1_sdr0_dsc", 0, false, NULL},
-	{"pa_fr1_sdr1_dsc", 0, false, NULL},
-	{"pa_fr1_sdr0_scg_dsc", 0, false, NULL},
-	{"pa_fr1_sdr1_scg_dsc", 0, false, NULL},
-	{"mmw0_dsc", 0, false, NULL},
-	{"mmw1_dsc", 0, false, NULL},
-	{"mmw2_dsc", 0, false, NULL},
-	{"mmw3_dsc", 0, false, NULL},
-	{"mmw_ul_throttling_dsc", 0, false, NULL},
-	{"mmw_ific_dsc", 0, false, NULL},
+	{"modem_pa", 0, false, NULL},
+	{"modem_tj", 0, false, NULL},
 };
 
 static int horae_ctrl_check(char *name) {
@@ -289,7 +241,7 @@ static int qmi_set_cur_state(struct thermal_cooling_device *cdev,
 	/* save it and return if server exit */
 	if (!qmi_cdev->connection_active) {
 		qmi_cdev->mtgn_state = state;
-		pr_err("Pending request:%ld for %s\n", state,
+		pr_debug("Pending request:%ld for %s\n", state,
 				qmi_cdev->cdev_name);
 		return 0;
 	}
@@ -400,7 +352,7 @@ static int qmi_register_cooling_device(struct qmi_cooling_device *qmi_cdev)
 			qmi_cdev->cdev_name, PTR_ERR(qmi_cdev->cdev));
 		return PTR_ERR(qmi_cdev->cdev);
 	}
-	pr_err("Cooling register success for %s\n", qmi_cdev->cdev_name);
+	pr_debug("Cooling register success for %s\n", qmi_cdev->cdev_name);
 
 	for (i = 0; i < HORAE_QMI_NUM; i++) {
 		if (!strcmp(qmi_cdev->cdev_name, horae_qmi_cdev[i].name)

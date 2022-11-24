@@ -20,7 +20,6 @@ static inline void cb_reset(int cpu, u64 time)
 static inline unsigned int cb_cap(struct cpufreq_policy *pol, unsigned int freq)
 {
 }
-
 static inline void cb_stuff_init(struct cpufreq_policy *policy)
 {
 }

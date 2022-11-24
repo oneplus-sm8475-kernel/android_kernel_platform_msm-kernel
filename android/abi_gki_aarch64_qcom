@@ -3052,7 +3052,6 @@
   xhci_trb_virt_to_dma
   zone_watermark_ok
   zone_watermark_ok_safe
-#ifdef VENDOR_EDIT
 __hid_register_driver
 __hid_request
 filp_close

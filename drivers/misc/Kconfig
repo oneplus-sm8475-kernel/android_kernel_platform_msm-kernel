@@ -567,6 +567,4 @@ source "drivers/misc/cardreader/Kconfig"
 source "drivers/misc/habanalabs/Kconfig"
 source "drivers/misc/uacce/Kconfig"
 source "drivers/misc/tri_state_key/Kconfig"
-source "drivers/misc/aw8680x/Kconfig"
-source "drivers/misc/cs_press/Kconfig"
 endmenu

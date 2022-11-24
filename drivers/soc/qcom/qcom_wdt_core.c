@@ -696,7 +696,8 @@ static __ref int qcom_wdt_kthread(void *arg)
 		if (!kthread_should_stop()) {
 			spin_lock(&wdog_dd->freeze_lock);
 			if (!wdog_dd->freeze_in_progress)
-				mod_timer(&wdog_dd->pet_timer,jiffies + delay_time);
+				mod_timer(&wdog_dd->pet_timer,
+					jiffies + delay_time);
 			spin_unlock(&wdog_dd->freeze_lock);
 		}
 

@@ -39,8 +39,6 @@
 #include "ufs_quirks.h"
 #include "ufshcd-crypto-qti.h"
 #include "../sd.h"
-#include <trace/hooks/ufshcd.h>
-
 #define UFS_QCOM_DEFAULT_DBG_PRINT_EN	\
 	(UFS_QCOM_DBG_PRINT_REGS_EN | UFS_QCOM_DBG_PRINT_TEST_BUS_EN)
 
@@ -68,11 +66,12 @@
 static char android_boot_dev[ANDROID_BOOT_DEV_MAX];
 
 static DEFINE_PER_CPU(struct freq_qos_request, qos_min_req);
+
 struct ufs_transmission_status_t ufs_transmission_status;
 struct device_attribute ufs_transmission_status_attr;
 struct unipro_signal_quality_ctrl signalCtrl;
-int ufsplus_wb_status = 0;
-int ufsplus_hpb_status = 0;
+
+//static bool no_defer;
 
 /* clk freq mode */
 enum {
@@ -591,6 +590,12 @@ static int ufs_qcom_power_up_sequence(struct ufs_hba *hba)
 	enum phy_mode mode = (host->limit_rate == PA_HS_MODE_B) ?
 					PHY_MODE_UFS_HS_B : PHY_MODE_UFS_HS_A;
 	int submode = host->limit_phy_submode;
+
+	/* Reset UFS Host Controller and PHY */
+	ret = ufs_qcom_host_reset(hba);
+	if (ret)
+		dev_warn(hba->dev, "%s: host reset returned %d\n",
+				  __func__, ret);
 
 	if (host->hw_ver.major < 0x4)
 		submode = UFS_QCOM_PHY_SUBMODE_NON_G4;
@@ -2583,8 +2588,6 @@ ufs_qcom_query_ioctl(struct ufs_hba *hba, u8 lun, void __user *buffer)
 		case QUERY_DESC_IDN_INTERCONNECT:
 		case QUERY_DESC_IDN_GEOMETRY:
 		case QUERY_DESC_IDN_POWER:
-/* add for read healthy desc by ioctl */
-		case QUERY_DESC_IDN_HEALTH:
 			index = 0;
 			break;
 		case QUERY_DESC_IDN_UNIT:
@@ -2629,8 +2632,6 @@ ufs_qcom_query_ioctl(struct ufs_hba *hba, u8 lun, void __user *buffer)
 		case QUERY_ATTR_IDN_EE_CONTROL:
 		case QUERY_ATTR_IDN_EE_STATUS:
 		case QUERY_ATTR_IDN_SECONDS_PASSED:
-/* add for read ffu status attribute by ioctl */
-		case QUERY_ATTR_IDN_FFU_STATUS:
 			index = 0;
 			break;
 		case QUERY_ATTR_IDN_DYN_CAP_NEEDED:
@@ -4904,17 +4905,13 @@ static void ufs_qcom_parse_lpm(struct ufs_qcom_host *host)
 static int ufs_qcom_device_reset(struct ufs_hba *hba)
 {
 	struct ufs_qcom_host *host = ufshcd_get_variant(hba);
-	int ret;
-
-	/* Reset UFS Host Controller and PHY */
-	ret = ufs_qcom_host_reset(hba);
-	if (ret)
-		dev_warn(hba->dev, "%s: host reset returned %d\n",
-					__func__, ret);
 
 	/* reset gpio is optional */
 	if (!host->device_reset)
 		return -EOPNOTSUPP;
+
+	/* disable hba before device reset */
+	ufshcd_hba_stop(hba);
 
 	/*
 	 * The UFS device shall detect reset pulses of 1us, sleep for 10us to
@@ -5407,6 +5404,7 @@ static void ufs_qcom_register_hooks(void)
 				ufs_qcom_hook_clock_scaling, NULL);
 }
 
+
 //bsp.storage.ufs 2021.10.14 add for /proc/devinfo/ufs
 static void create_devinfo_ufs(void *data, async_cookie_t cookie)
 {
@@ -5432,10 +5430,7 @@ static void create_devinfo_ufs(void *data, async_cookie_t cookie)
                 strncpy(vendor, hba->sdev_ufs_device->vendor, 8);
                 strncpy(model, hba->sdev_ufs_device->model, 16);
         }
-		if (ufshcd_is_wb_allowed(hba)) {
-			ufsplus_wb_status = 1;
-		}
-	register_device_proc_for_ufsplus("ufsplus_status", &ufsplus_hpb_status, &ufsplus_wb_status);
+
 	register_device_proc("ufs_version", temp_version, vendor);
 	register_device_proc("ufs", model, vendor);
 }
@@ -5461,6 +5456,8 @@ static int ufs_cpufreq_status(void)
 	return 0;
 }
 #endif
+
+
 
 /**
  * ufs_qcom_probe - probe routine of the driver

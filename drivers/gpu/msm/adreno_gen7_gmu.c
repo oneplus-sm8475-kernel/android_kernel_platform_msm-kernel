@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
+ * Copyright (c) 2021, The Linux Foundation. All rights reserved.
  * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
@@ -2030,6 +2031,9 @@ static int gen7_gmu_regulators_probe(struct gen7_gmu_device *gmu,
 		return PTR_ERR(gmu->gx_gdsc);
 	}
 
+	init_completion(&gmu->gdsc_gate);
+	complete_all(&gmu->gdsc_gate);
+
 	gmu->gdsc_nb.notifier_call = gmu_cx_gdsc_event;
 	ret = devm_regulator_register_notifier(gmu->cx_gdsc, &gmu->gdsc_nb);
 
@@ -2037,9 +2041,6 @@ static int gen7_gmu_regulators_probe(struct gen7_gmu_device *gmu,
 		dev_err(&pdev->dev, "Failed to register gmu cx gdsc notifier: %d\n", ret);
 		return ret;
 	}
-
-	init_completion(&gmu->gdsc_gate);
-	complete_all(&gmu->gdsc_gate);
 
 	return 0;
 }
@@ -2370,6 +2371,14 @@ static int gen7_gpu_boot(struct adreno_device *adreno_dev)
 		gen7_disable_gpu_irq(adreno_dev);
 		goto oob_clear;
 	}
+
+	/*
+	 * At this point it is safe to assume that we recovered. Setting
+	 * this field allows us to take a new snapshot for the next failure
+	 * if we are prioritizing the first unrecoverable snapshot.
+	 */
+	if (device->snapshot)
+		device->snapshot->recovered = true;
 
 	/* Start the dispatcher */
 	adreno_dispatcher_start(device);

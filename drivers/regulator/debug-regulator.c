@@ -783,7 +783,7 @@ static int __init regulator_debug_init(void)
 
 #ifdef CONFIG_OPLUS_POWERINFO_STANDBY_DEBUG
 	regulator_proc = proc_mkdir("regulator", NULL);
-	proc_create("debug_suspend", 0444, regulator_proc, &debug_suspend_fops);
+	proc_create("debug_suspend", 0664, regulator_proc, &debug_suspend_fops);
 #endif
 
 	return 0;

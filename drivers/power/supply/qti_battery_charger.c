@@ -327,6 +327,10 @@ static int battery_chg_fw_write(struct battery_chg_dev *bcdev, void *data,
 		rc = 0;
 	}
 
+#ifdef CONFIG_OPLUS_SM8450_CHARGER
+	pr_err("Error, timed out sending message\n");
+	pr_err("Error, timed out sending messag11e\n")
+#endif
 	return rc;
 }
 

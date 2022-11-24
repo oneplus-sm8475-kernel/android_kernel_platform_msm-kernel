@@ -16,19 +16,14 @@
 #include <linux/spinlock.h>
 #include <linux/atomic.h>
 #include <linux/sched/debug.h>
-
-#if IS_ENABLED(CONFIG_OPLUS_FEATURE_SCHED_ASSIST)
-#include <../kernel/oplus_perf_sched/sched_assist/sa_rwsem.h>
-#endif
-
 #include <linux/io.h>
-
 #include <soc/qcom/watchdog.h>
 
 #include <trace/hooks/debug.h>
 #include <trace/hooks/printk.h>
 #include <trace/hooks/timer.h>
 #include <trace/hooks/traps.h>
+
 
 static DEFINE_PER_CPU(struct pt_regs, regs_before_stop);
 static DEFINE_RAW_SPINLOCK(stop_lock);
@@ -250,6 +245,7 @@ static int cpu_vendor_hooks_driver_probe(struct platform_device *pdev)
 		unregister_trace_android_vh_printk_hotplug(printk_hotplug, NULL);
 		return ret;
 	}
+
 
 	ret = register_trace_android_rvh_do_undefinstr(print_undefinstr, NULL);
 	if (ret)

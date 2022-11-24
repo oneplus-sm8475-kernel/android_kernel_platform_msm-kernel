@@ -40,27 +40,27 @@ bool is_support_chip(chip_type chip)
 	}
 
 	switch(chip) {
-	case NQ330:
-		target_chipset = "NQ330";
-		break;
-	case SN100T:
-		target_chipset = "SN100T|SN110T";
-		break;
-	case SN100F:
-		target_chipset = "SN100F";
-		break;
-	case ST21H:
-		target_chipset = "ST21H";
-		break;
-	case ST54H:
-		target_chipset = "ST54H";
-		break;
-	case PN557:
-		target_chipset = "PN557";
-		break;
-	default:
-		target_chipset = "UNKNOWN";
-		break;
+		case NQ330:
+			target_chipset = "NQ330";
+			break;
+		case SN100T:
+			target_chipset = "SN100T|SN110T";
+			break;
+		case SN100F:
+			target_chipset = "SN100F";
+			break;
+		case ST21H:
+			target_chipset = "ST21H";
+			break;
+		case ST54H:
+			target_chipset = "ST54H";
+			break;
+		case PN557:
+			target_chipset = "PN557";
+			break;
+		default:
+			target_chipset = "UNKNOWN";
+			break;
 	}
 
 	if (strstr(target_chipset, current_chipset) != NULL) {
@@ -121,20 +121,20 @@ static int oplus_nfc_probe(struct platform_device *pdev)
 	**project contains letters is big then 0x10000 == 65536
 	*/
 	if (project > 0x10000) {
-		snprintf(prop_name, sizeof(prop_name), "chipset-%X", project);
+		sprintf(prop_name, "chipset-%X", project);
 	} else {
-		snprintf(prop_name, sizeof(prop_name), "chipset-%u", project);
+		sprintf(prop_name, "chipset-%u", project);
 	}
 	pr_err("%s, prop to be read = %s", __func__, prop_name);
 	np = dev->of_node;
 
 	if (of_property_read_string(dev->of_node, prop_name, &chipset_node))
 	{
-		snprintf(current_chipset, sizeof(current_chipset), "NULL");
+		sprintf(current_chipset, "NULL");
 	} else
 	{
 		pr_err("%s, get chipset_node content = %s", __func__, chipset_node);
-		strncpy(current_chipset, chipset_node, sizeof(current_chipset));
+		strcpy(current_chipset, chipset_node);
 		support_nfc = true;
 	}
 

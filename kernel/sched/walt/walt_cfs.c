@@ -13,14 +13,14 @@
 #include "../../../drivers/android/binder_trace.h"
 
 #if IS_ENABLED(CONFIG_OPLUS_FEATURE_SCHED_ASSIST)
-#include <../kernel/oplus_perf_sched/sched_assist/sa_fair.h>
-#include <../kernel/oplus_perf_sched/sched_assist/sa_common.h>
+#include <../kernel/oplus_cpu/sched/sched_assist/sa_fair.h>
+#include <../kernel/oplus_cpu/sched/sched_assist/sa_common.h>
 #endif
-#ifdef CONFIG_OPLUS_FEATURE_INPUT_BOOST
-#include "tuning/frame_boost_group.h"
-#include "tuning/webview_boost.h"
-#include "tuning/cluster_boost.h"
+
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_FRAME_BOOST)
+#include <../kernel/oplus_cpu/sched/frame_boost/frame_group.h>
 #endif
+
 static void create_util_to_cost_pd(struct em_perf_domain *pd)
 {
 	int util, cpu = cpumask_first(to_cpumask(pd->cpus));
@@ -119,11 +119,7 @@ struct find_best_target_env {
  * utilization of the specified task, whenever the task is currently
  * contributing to the CPU utilization.
  */
-#ifdef CONFIG_OPLUS_FEATURE_INPUT_BOOST
-unsigned long cpu_util_without(int cpu, struct task_struct *p)
-#else
 static unsigned long cpu_util_without(int cpu, struct task_struct *p)
-#endif
 {
 	unsigned int util;
 
@@ -240,10 +236,8 @@ enum fastpaths {
 	NONE = 0,
 	SYNC_WAKEUP,
 	PREV_CPU_FASTPATH,
-#ifdef CONFIG_OPLUS_FEATURE_INPUT_BOOST
-	FRAME_BOOST_GROUP,
-	WEBVIEW_BOOST,
-	CLUSTER_BOOST,
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_FRAME_BOOST)
+	FRAME_BOOST_SELECT,
 #endif
 #ifdef CONFIG_OPLUS_FEATURE_SCHED_SPREAD
 	NR_WAKEUP_SELECT,
@@ -841,10 +835,6 @@ int walt_find_energy_efficient_cpu(struct task_struct *p, int prev_cpu,
 	int first_cpu;
 	bool energy_eval_needed = true;
 	struct compute_energy_output output;
-#ifdef CONFIG_OPLUS_FEATURE_INPUT_BOOST
-	int fbg_best_cpu = -1;
-	struct cpumask *fbg_target = NULL;
-#endif
 
 	if (walt_is_many_wakeup(sibling_count_hint) && prev_cpu != cpu &&
 			cpumask_test_cpu(prev_cpu, &p->cpus_mask))
@@ -876,38 +866,6 @@ int walt_find_energy_efficient_cpu(struct task_struct *p, int prev_cpu,
 	if (sync && (need_idle || (is_rtg && curr_is_rtg)))
 		sync = 0;
 
-#ifdef CONFIG_OPLUS_FEATURE_INPUT_BOOST
-	fbg_cluster_boost(p, &fbg_best_cpu);
-	if (fbg_best_cpu >= 0) {
-		best_energy_cpu = fbg_best_cpu;
-		fbt_env.fastpath = CLUSTER_BOOST;
-		rcu_read_unlock();
-		goto frame_done;
-	}
-
-	if (need_frame_boost(p)) {
-		fbg_target = find_rtg_target(p);
-		if (fbg_target) {
-			/* full boost or heavy task, select prime cluster */
-			fbg_best_cpu = cpumask_first(fbg_target);
-			if ((cpumask_weight(fbg_target) == 1) && is_prime_fits(fbg_best_cpu)) {
-				best_energy_cpu = fbg_best_cpu;
-				fbt_env.fastpath = FRAME_BOOST_GROUP;
-				rcu_read_unlock();
-				goto frame_done;
-			}
-
-			fbg_best_cpu = find_fbg_cpu(p);
-			if (fbg_best_cpu >= 0) {
-				best_energy_cpu = fbg_best_cpu;
-				fbt_env.fastpath = FRAME_BOOST_GROUP;
-				rcu_read_unlock();
-				goto frame_done;
-			}
-		}
-	}
-	trace_select_fbg_cpu(p, is_full_throttle_boost(), sched_assist_scene(SA_LAUNCH), (fbg_target == NULL), fbg_best_cpu);
-#endif
 	if (sysctl_sched_sync_hint_enable && sync
 			&& bias_to_this_cpu(p, cpu, start_cpu)) {
 		best_energy_cpu = cpu;
@@ -1027,11 +985,12 @@ int walt_find_energy_efficient_cpu(struct task_struct *p, int prev_cpu,
 unlock:
 	rcu_read_unlock();
 
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_FRAME_BOOST)
+	if (set_frame_group_task_to_perfer_cpu(p, &best_energy_cpu))
+		fbt_env.fastpath = FRAME_BOOST_SELECT;
+#endif
 #if IS_ENABLED(CONFIG_OPLUS_FEATURE_SCHED_ASSIST)
 	set_ux_task_to_prefer_cpu(p, &best_energy_cpu);
-#endif
-#ifdef CONFIG_OPLUS_FEATURE_INPUT_BOOST
-frame_done:
 #endif
 	trace_sched_task_util(p, cpumask_bits(candidates)[0], best_energy_cpu,
 			sync, fbt_env.need_idle, fbt_env.fastpath,

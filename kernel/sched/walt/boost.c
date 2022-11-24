@@ -42,7 +42,11 @@ void walt_init_topapp_tg(struct task_group *tg)
 	 *TODO:both enable colocate & frame boost, we should disable
 	 *colocate in next version
 	 */
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_FRAME_BOOST)
+	wtg->colocate = false;
+#else
 	wtg->colocate = true;
+#endif
 	wtg->sched_boost_enable[NO_BOOST] = false;
 	wtg->sched_boost_enable[FULL_THROTTLE_BOOST] = true;
 	wtg->sched_boost_enable[CONSERVATIVE_BOOST] = true;

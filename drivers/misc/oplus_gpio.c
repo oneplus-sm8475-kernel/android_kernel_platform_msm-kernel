@@ -44,7 +44,6 @@ do { \
 
 
 #define MAX_GPIOS 3
-#define MAX_DETECT_COUNT 20
 #define OPLUS_GPIO_MAJOR 0
 
 #define OPLUS_GPIO_MAGIC 'E'
@@ -174,7 +173,6 @@ static int dual_sim_det_show(struct seq_file *m, void *v)
 {
 	struct sim_det_data *det_info = m->private;
 	int esim_status = 0;
-	int i;
 
     OPLUS_GPIO_MSG("dual_sim_det_show begin");
 	if (det_info) {
@@ -203,16 +201,19 @@ static int dual_sim_det_show(struct seq_file *m, void *v)
 		} else {
 			/* trigger reset pull up */
 			uim_qmi_power_up_req(2);
-			msleep(120);
-			/* detect 10 times */
-			for(i = 0; i < MAX_DETECT_COUNT; i++) {
+			msleep(300);
+
+			/* get reset pin status 3 times*/
+			det_info->gpio_status = gpio_get_value(det_info->gpio);
+
+			if (det_info->gpio_status != 1) {
+				msleep(120);
 				det_info->gpio_status = gpio_get_value(det_info->gpio);
-				OPLUS_GPIO_MSG("[%d]gpio_status: %d\n", i, det_info->gpio_status);
-				if (det_info->gpio_status != 1) {
-					msleep(120);
-				} else {
-					break;
-				}
+			}
+
+			if (det_info->gpio_status != 1) {
+				msleep(120);
+				det_info->gpio_status = gpio_get_value(det_info->gpio);
 			}
 		}
 
