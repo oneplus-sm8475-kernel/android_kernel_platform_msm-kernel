@@ -1185,7 +1185,7 @@ void synx_util_cb_dispatch(struct work_struct *cb_dispatch)
 				client->id);
 	}
 
-	dprintk(SYNX_DBG,
+	dprintk(SYNX_INFO,
 		"callback dispatched for handle %u, status %u, data %pK\n",
 		payload.h_synx, payload.status, payload.data);
 
