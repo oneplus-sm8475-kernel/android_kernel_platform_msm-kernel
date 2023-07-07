@@ -11,7 +11,6 @@
 #define ICNSS_MAX_IRQ_REGISTRATIONS    12
 #define IWCN_MAX_IRQ_REGISTRATIONS    32
 #define ICNSS_MAX_TIMESTAMP_LEN        32
-#define ICNSS_WLFW_MAX_BUILD_ID_LEN    128
 
 #ifndef ICNSS_API_WITH_DEV
 #define ICNSS_API_WITH_DEV
@@ -137,7 +136,6 @@ struct icnss_soc_info {
 	uint32_t soc_id;
 	uint32_t fw_version;
 	char fw_build_timestamp[ICNSS_MAX_TIMESTAMP_LEN + 1];
-	char fw_build_id[ICNSS_WLFW_MAX_BUILD_ID_LEN + 1];
 };
 
 enum icnss_pinctrl_seq {
