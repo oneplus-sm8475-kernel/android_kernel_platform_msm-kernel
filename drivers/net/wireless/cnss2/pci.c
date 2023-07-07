@@ -837,8 +837,9 @@ static int cnss_setup_bus_bandwidth(struct cnss_plat_data *plat_priv,
 		cnss_pr_err("Invalid bus bandwidth Type: %d", bw);
 		return -EINVAL;
 	}
-
+	#ifndef OPLUS_BUG_STABILITY
 	cnss_pr_vdbg("Bandwidth vote to %d, save %d\n", bw, save);
+	#endif /*OPLUS_BUG_STABILITY*/
 
 	list_for_each_entry(bus_bw_info, &plat_priv->icc.list_head, list) {
 		ret = icc_set_bw(bus_bw_info->icc_path,
@@ -1656,8 +1657,10 @@ static int cnss_pci_set_mhi_state(struct cnss_pci_data *pci_priv,
 	if (ret)
 		goto out;
 
+	#ifndef OPLUS_BUG_STABILITY
 	cnss_pr_vdbg("Setting MHI state: %s(%d)\n",
 		     cnss_mhi_state_to_str(mhi_state), mhi_state);
+	#endif /* OPLUS_BUG_STABILITY */
 
 	switch (mhi_state) {
 	case CNSS_MHI_INIT:
@@ -3057,12 +3060,8 @@ int cnss_pci_register_driver_hdlr(struct cnss_pci_data *pci_priv,
 
 int cnss_pci_unregister_driver_hdlr(struct cnss_pci_data *pci_priv)
 {
-	struct cnss_plat_data *plat_priv;
+	struct cnss_plat_data *plat_priv = pci_priv->plat_priv;
 
-	if (!pci_priv)
-		return -EINVAL;
-
-	plat_priv = pci_priv->plat_priv;
 	set_bit(CNSS_DRIVER_UNLOADING, &plat_priv->driver_state);
 	cnss_pci_dev_shutdown(pci_priv);
 	pci_priv->driver_ops = NULL;
@@ -3357,9 +3356,9 @@ static int cnss_pci_runtime_suspend(struct device *dev)
 			return -EAGAIN;
 		}
 	}
-
+	#ifndef OPLUS_BUG_STABILITY
 	cnss_pr_vdbg("Runtime suspend start\n");
-
+	#endif /* OPLUS_BUG_STABILITY */
 	driver_ops = pci_priv->driver_ops;
 	if (driver_ops && driver_ops->runtime_ops &&
 	    driver_ops->runtime_ops->runtime_suspend)
@@ -3392,9 +3391,9 @@ static int cnss_pci_runtime_resume(struct device *dev)
 		cnss_pr_dbg("PCI link down recovery is in progress!\n");
 		return -EAGAIN;
 	}
-
+	#ifndef OPLUS_BUG_STABILITY
 	cnss_pr_vdbg("Runtime resume start\n");
-
+	#endif /* OPLUS_BUG_STABILITY */
 	driver_ops = pci_priv->driver_ops;
 	if (driver_ops && driver_ops->runtime_ops &&
 	    driver_ops->runtime_ops->runtime_resume)
@@ -5230,32 +5229,21 @@ static void cnss_dev_rddm_timeout_hdlr(struct timer_list *t)
 	struct cnss_pci_data *pci_priv =
 		from_timer(pci_priv, t, dev_rddm_timer);
 
-	enum mhi_ee_type mhi_ee;
-
 	if (!pci_priv)
 		return;
 
 	cnss_fatal_err("Timeout waiting for RDDM notification\n");
 
-	mhi_ee = mhi_get_exec_env(pci_priv->mhi_ctrl);
-
-	if (mhi_ee == MHI_EE_PBL)
-		cnss_pr_err("Unable to collect ramdumps due to abrupt reset\n");
-
-	if (mhi_ee == MHI_EE_RDDM) {
-		cnss_pr_info("Device MHI EE is RDDM, try to collect dump\n");
-		cnss_schedule_recovery(&pci_priv->pci_dev->dev,
-				       CNSS_REASON_RDDM);
-	} else {
-		cnss_mhi_debug_reg_dump(pci_priv);
-		cnss_pci_soc_scratch_reg_dump(pci_priv);
-		cnss_schedule_recovery(&pci_priv->pci_dev->dev,
-				       CNSS_REASON_TIMEOUT);
-	}
-
 	if (!cnss_pci_assert_host_sol(pci_priv))
 		return;
 
+	if (mhi_get_exec_env(pci_priv->mhi_ctrl) == MHI_EE_PBL)
+		cnss_pr_err("Unable to collect ramdumps due to abrupt reset\n");
+
+	cnss_mhi_debug_reg_dump(pci_priv);
+	cnss_pci_soc_scratch_reg_dump(pci_priv);
+
+	cnss_schedule_recovery(&pci_priv->pci_dev->dev, CNSS_REASON_TIMEOUT);
 }
 
 static void cnss_boot_debug_timeout_hdlr(struct timer_list *t)
@@ -5546,9 +5534,7 @@ static void cnss_pci_unregister_mhi(struct cnss_pci_data *pci_priv)
 
 	mhi_unregister_controller(mhi_ctrl);
 	kfree(mhi_ctrl->irq);
-	mhi_ctrl->irq = NULL;
 	mhi_free_controller(mhi_ctrl);
-	pci_priv->mhi_ctrl = NULL;
 }
 
 static void cnss_pci_config_regs(struct cnss_pci_data *pci_priv)
@@ -5830,7 +5816,6 @@ static void cnss_pci_remove(struct pci_dev *pci_dev)
 		cnss_bus_dev_to_plat_priv(&pci_dev->dev);
 
 	clear_bit(CNSS_PCI_PROBE_DONE, &plat_priv->driver_state);
-	cnss_pci_unregister_driver_hdlr(pci_priv);
 	cnss_pci_free_m3_mem(pci_priv);
 	cnss_pci_free_fw_mem(pci_priv);
 	cnss_pci_free_qdss_mem(pci_priv);
