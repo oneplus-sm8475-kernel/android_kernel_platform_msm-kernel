@@ -589,6 +589,35 @@ struct dwc3_msm {
 void *dwc_trace_ipc_log_ctxt;
 
 static void dwc3_pwr_event_handler(struct dwc3_msm *mdwc);
+#ifdef OPLUS_FEATURE_CHG_BASIC
+
+static bool (*oplus_ignore_usb_notify)(void);
+void oplus_dwc3_config_usbphy_pfunc(bool (*pfunc)(void))
+{
+	oplus_ignore_usb_notify = pfunc;
+}
+EXPORT_SYMBOL(oplus_dwc3_config_usbphy_pfunc);
+
+void oplus_usb_set_none_role(void)
+{
+	printk(KERN_ERR "%s\n", __func__);
+}
+EXPORT_SYMBOL(oplus_usb_set_none_role);
+
+static bool oplus_dwc3_need_set_usbphy_hz(void)
+{
+	bool ret = false;
+
+	if (oplus_ignore_usb_notify == NULL) {
+		ret = false;
+	} else {
+		ret = oplus_ignore_usb_notify();
+	}
+
+	printk(KERN_ERR "%s, set usbphy hz:%d\n", __func__, ret);
+	return ret;
+}
+#endif
 static int get_chg_type(struct dwc3_msm *mdwc);
 
 static inline void dwc3_msm_ep_writel(void __iomem *base, u32 offset, u32 value)
@@ -4521,6 +4550,15 @@ static int dwc3_msm_set_role(struct dwc3_msm *mdwc, enum usb_role role)
 		return -EINVAL;
 
 	mutex_lock(&mdwc->role_switch_mutex);
+
+#ifdef OPLUS_FEATURE_CHG_BASIC
+	if (oplus_dwc3_need_set_usbphy_hz() == true && role != USB_ROLE_NONE) {
+		pr_err("!!!ignore the notify to start USB device mode");
+		mutex_unlock(&mdwc->role_switch_mutex);
+		return 0;
+	}
+#endif
+
 	cur_role = dwc3_msm_get_role(mdwc);
 
 	dbg_log_string("cur_role:%s new_role:%s refcnt:%d\n", usb_role_string(cur_role),
@@ -5026,7 +5064,7 @@ static int dwc3_msm_debug_init(struct dwc3_msm *mdwc)
 		dev_err(mdwc->dev, "Error getting ipc_log_ctxt\n");
 
 	snprintf(ipc_log_ctx_name, sizeof(ipc_log_ctx_name),
-				"%s_reg_dumps", ipc_log_name);
+				"%s_ep_events", ipc_log_name);
 	mdwc->dwc_dma_ipc_log_ctxt = ipc_log_context_create(2 * NUM_LOG_PAGES,
 					ipc_log_ctx_name, DWC3_MINIDUMP);
 	if (!mdwc->dwc_dma_ipc_log_ctxt)
@@ -5196,26 +5234,6 @@ static int dwc3_msm_parse_core_params(struct dwc3_msm *mdwc, struct device_node 
 	}
 
 	return ret;
-}
-
-static int dwc3_msm_smmu_fault_handler(struct iommu_domain *domain, struct device *dev,
-					unsigned long iova, int flags, void *data)
-{
-	struct dwc3_msm *mdwc = data;
-	struct dwc3 *dwc = platform_get_drvdata(mdwc->dwc3);
-	const struct debugfs_reg32 *dwc3_regs = dwc->regset->regs;
-	int size = dwc->regset->nregs, i;
-
-	ipc_log_string(mdwc->dwc_dma_ipc_log_ctxt, "[Reg_Name: Offset\t Value]");
-	for (i = 0; i < size; i++)
-		dump_dwc3_regs(dwc3_regs[i].name, dwc3_regs[i].offset,
-					dwc3_readl(dwc->regs, dwc3_regs[i].offset));
-       /*
-	* Let the iommu core know we're not really handling this fault;
-	* we just use it to dump the registers for debugging purposes.
-	*/
-	return -ENOSYS;
-
 }
 
 static int dwc3_msm_probe(struct platform_device *pdev)
@@ -6098,7 +6116,11 @@ static int dwc3_otg_start_peripheral(struct dwc3_msm *mdwc, int on)
 		 * disable), and retry suspend again.
 		 */
 		ret = pm_runtime_put_sync(&mdwc->dwc3->dev);
-		if (ret < 0) {
+//#ifdef OPLUS_FEATURE_CHG_BASIC
+		if (!pm_runtime_suspended(&mdwc->dwc3->dev)) {
+//#else
+//		if (ret < 0) {
+//#endif
 			while (--timeout && dwc->connected)
 				msleep(20);
 			dbg_event(0xFF, "StopGdgt connected", dwc->connected);
@@ -6127,7 +6149,6 @@ static void dwc3_otg_sm_work(struct work_struct *w)
 {
 	struct dwc3_msm *mdwc = container_of(w, struct dwc3_msm, sm_work.work);
 	struct dwc3 *dwc = NULL;
-	struct iommu_domain *dwc3_msm_domain;
 	bool work = false;
 	int ret = 0;
 	unsigned long delay = 0;
@@ -6166,14 +6187,6 @@ static void dwc3_otg_sm_work(struct work_struct *w)
 		}
 
 		mdwc->drd_state = DRD_STATE_IDLE;
-
-		dwc3_msm_domain = iommu_get_domain_for_dev(&mdwc->dwc3->dev);
-		if (dwc3_msm_domain) {
-			iommu_set_fault_handler(dwc3_msm_domain, dwc3_msm_smmu_fault_handler, mdwc);
-			dev_info(mdwc->dev, "dwc3 msm iommu fault handler registered\n");
-		} else {
-			dev_err(mdwc->dev, "dwc3 msm iommu domain not available\n");
-		}
 
 		/* put controller and phy in suspend if no cable connected */
 		if (test_bit(ID, &mdwc->inputs) &&
