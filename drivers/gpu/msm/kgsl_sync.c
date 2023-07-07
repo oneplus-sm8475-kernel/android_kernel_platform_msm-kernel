@@ -6,7 +6,6 @@
 
 #include <linux/file.h>
 #include <linux/slab.h>
-#include <linux/soc/qcom/msm_hw_fence.h>
 #include <linux/sync_file.h>
 
 #include "kgsl_device.h"
@@ -65,9 +64,6 @@ static struct kgsl_sync_fence *kgsl_sync_fence_create(
 static void kgsl_sync_fence_release(struct dma_fence *fence)
 {
 	struct kgsl_sync_fence *kfence = (struct kgsl_sync_fence *)fence;
-
-	if (test_bit(MSM_HW_FENCE_FLAG_ENABLED_BIT, &fence->flags))
-		msm_hw_fence_destroy(kfence->hw_fence_handle, fence);
 
 	kgsl_sync_timeline_put(kfence->parent);
 	kfree(kfence);
@@ -179,7 +175,6 @@ int kgsl_add_fence_event(struct kgsl_device *device,
 	struct kgsl_sync_fence *kfence = NULL;
 	int ret = -EINVAL;
 	unsigned int cur;
-	bool retired = false;
 
 	priv.fence_fd = -1;
 
@@ -217,9 +212,7 @@ int kgsl_add_fence_event(struct kgsl_device *device,
 
 	kgsl_readtimestamp(device, context, KGSL_TIMESTAMP_RETIRED, &cur);
 
-	retired = timestamp_cmp(cur, timestamp) >= 0;
-
-	if (retired) {
+	if (timestamp_cmp(cur, timestamp) >= 0) {
 		ret = 0;
 		kgsl_sync_timeline_signal(context->ktimeline, cur);
 	} else {
@@ -233,9 +226,6 @@ int kgsl_add_fence_event(struct kgsl_device *device,
 		goto out;
 	}
 	fd_install(priv.fence_fd, kfence->sync_file->file);
-
-	if (!retired)
-		device->ftbl->create_hw_fence(device, kfence);
 
 out:
 	kgsl_context_put(context);
@@ -425,7 +415,14 @@ static void kgsl_sync_fence_callback(struct dma_fence *fence,
 {
 	struct kgsl_sync_fence_cb *kcb = (struct kgsl_sync_fence_cb *)cb;
 
-	kcb->func(kcb->priv);
+	/*
+	 * If the callback is marked for cancellation in a separate thread,
+	 * let the other thread do the cleanup.
+	 */
+	if (kcb->func(kcb->priv)) {
+		dma_fence_put(kcb->fence);
+		kfree(kcb);
+	}
 }
 
 static void kgsl_get_fence_names(struct dma_fence *fence,
@@ -515,14 +512,23 @@ struct kgsl_sync_fence_cb *kgsl_sync_fence_async_wait(int fd,
 }
 
 /*
- * Cancel the fence async callback.
+ * Cancel the fence async callback and do the cleanup. The caller must make
+ * sure that the callback (if run before cancelling) returns false, so that
+ * no other thread frees the pointer.
  */
 void kgsl_sync_fence_async_cancel(struct kgsl_sync_fence_cb *kcb)
 {
 	if (kcb == NULL)
 		return;
 
+	/*
+	 * After fence_remove_callback() returns, the fence callback is
+	 * either not called at all, or completed without freeing kcb.
+	 * This thread can then put the fence refcount and free kcb.
+	 */
 	dma_fence_remove_callback(kcb->fence, &kcb->fence_cb);
+	dma_fence_put(kcb->fence);
+	kfree(kcb);
 }
 
 struct kgsl_syncsource {

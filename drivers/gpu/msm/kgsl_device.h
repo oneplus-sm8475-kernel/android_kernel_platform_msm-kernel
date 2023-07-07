@@ -70,7 +70,6 @@ enum kgsl_event_results {
 	{ KGSL_CONTEXT_SAVE_GMEM, "SAVE_GMEM" }, \
 	{ KGSL_CONTEXT_IFH_NOP, "IFH_NOP" }, \
 	{ KGSL_CONTEXT_SECURE, "SECURE" }, \
-	{ KGSL_CONTEXT_LPAC, "LPAC" }, \
 	{ KGSL_CONTEXT_NO_SNAPSHOT, "NO_SNAPSHOT" }
 
 #define KGSL_CONTEXT_ID(_context) \
@@ -83,7 +82,6 @@ struct kgsl_context;
 struct kgsl_power_stats;
 struct kgsl_event;
 struct kgsl_snapshot;
-struct kgsl_sync_fence;
 
 struct kgsl_functable {
 	/* Mandatory functions - these functions must be implemented
@@ -110,8 +108,7 @@ struct kgsl_functable {
 	void (*power_stats)(struct kgsl_device *device,
 		struct kgsl_power_stats *stats);
 	void (*snapshot)(struct kgsl_device *device,
-		struct kgsl_snapshot *snapshot, struct kgsl_context *context,
-		struct kgsl_context *context_lpac);
+		struct kgsl_snapshot *snapshot, struct kgsl_context *context);
 	/** @drain_and_idle: Drain the GPU and wait for it to idle */
 	int (*drain_and_idle)(struct kgsl_device *device);
 	struct kgsl_device_private * (*device_private_create)(void);
@@ -168,8 +165,6 @@ struct kgsl_functable {
 	/** @dequeue_recurring_cmd: Dequeue recurring commands from GMU */
 	int (*dequeue_recurring_cmd)(struct kgsl_device *device,
 		struct kgsl_context *context);
-	/** @create_hw_fence: Create a hardware fence */
-	void (*create_hw_fence)(struct kgsl_device *device, struct kgsl_sync_fence *kfence);
 };
 
 struct kgsl_ioctl {
@@ -278,7 +273,6 @@ struct kgsl_device {
 	struct kgsl_pwrscale pwrscale;
 
 	int reset_counter; /* Track how many GPU core resets have occurred */
-	struct workqueue_struct *events_wq;
 
 	/* Number of active contexts seen globally for this device */
 	int active_context_count;
@@ -311,6 +305,13 @@ struct kgsl_device {
 	spinlock_t timelines_lock;
 	/** @fence_trace_array: A local trace array for fence debugging */
 	struct trace_array *fence_trace_array;
+
+#ifdef CONFIG_OPLUS_GPU_MINIDUMP
+//MULTIMEIDA.FEATURE.GPU.MINIDUMP, 2021/07/26, add for oplus gpu mini dump
+	bool snapshot_control;
+	int snapshotfault;
+#endif
+
 	/** @l3_vote: Enable/Disable l3 voting */
 	bool l3_vote;
 	/** @pdev_loaded: Flag to test if platform driver is probed */
@@ -321,8 +322,6 @@ struct kgsl_device {
 	struct reset_control *freq_limiter_irq_clear;
 	/** @freq_limiter_intr_num: The interrupt number for freq limiter */
 	int freq_limiter_intr_num;
-	/** @bcl_data_kobj: Kobj for bcl_data sysfs node */
-	struct kobject bcl_data_kobj;
 };
 
 #define KGSL_MMU_DEVICE(_mmu) \
@@ -513,10 +512,6 @@ struct kgsl_process_private {
 	 * @private_mutex: Mutex lock to protect kgsl_process_private
 	 */
 	struct mutex private_mutex;
-	/**
-	 * @cmdline: Cmdline string of the process
-	 */
-	char *cmdline;
 };
 
 struct kgsl_device_private {
@@ -555,12 +550,6 @@ struct kgsl_snapshot {
 	unsigned int ib2size;
 	bool ib1dumped;
 	bool ib2dumped;
-	u64 ib1base_lpac;
-	u64 ib2base_lpac;
-	u32 ib1size_lpac;
-	u32 ib2size_lpac;
-	bool ib1dumped_lpac;
-	bool ib2dumped_lpac;
 	u8 *start;
 	size_t size;
 	u8 *ptr;
@@ -573,11 +562,14 @@ struct kgsl_snapshot {
 	struct work_struct work;
 	struct completion dump_gate;
 	struct kgsl_process_private *process;
-	struct kgsl_process_private *process_lpac;
 	unsigned int sysfs_read;
 	bool first_read;
 	bool recovered;
 	struct kgsl_device *device;
+#ifdef CONFIG_OPLUS_GPU_MINIDUMP
+//MULTIMEIDA.FEATURE.GPU.MINIDUMP, 2021/07/26, add for oplus gpu mini dump
+	char snapshot_hashid[96];
+#endif
 };
 
 /**
@@ -668,8 +660,7 @@ const char *kgsl_pwrstate_to_str(unsigned int state);
 void kgsl_device_snapshot_probe(struct kgsl_device *device, u32 size);
 
 void kgsl_device_snapshot(struct kgsl_device *device,
-			struct kgsl_context *context, struct kgsl_context *context_lpac,
-			bool gmu_fault);
+			struct kgsl_context *context, bool gmu_fault);
 void kgsl_device_snapshot_close(struct kgsl_device *device);
 
 void kgsl_events_init(void);
@@ -932,6 +923,29 @@ void kgsl_process_private_put(struct kgsl_process_private *private);
 
 struct kgsl_process_private *kgsl_process_private_find(pid_t pid);
 
+#ifdef CONFIG_OPLUS_GPU_MINIDUMP
+//MULTIMEIDA.FEATURE.GPU.MINIDUMP, 2020/04/06, add for oplus gpu mini dump
+/**
+ * kgsl_sysfs_store() - parse a string from a sysfs store function
+ * @buf: Incoming string to parse
+ * @ptr: Pointer to an unsigned int to store the value
+ */
+static inline int kgsl_sysfs_store(const char *buf, unsigned int *ptr)
+{
+	unsigned int val;
+	int rc;
+
+	rc = kstrtou32(buf, 0, &val);
+	if (rc)
+		return rc;
+
+	if (ptr)
+		*ptr = val;
+
+	return 0;
+}
+#endif
+
 /*
  * A helper macro to print out "not enough memory functions" - this
  * makes it easy to standardize the messages as well as cut down on
@@ -1054,19 +1068,5 @@ static inline void kgsl_trace_gpu_mem_total(struct kgsl_device *device,
 static inline void kgsl_trace_gpu_mem_total(struct kgsl_device *device,
 						s64 delta) {}
 #endif
-
-/*
- * kgsl_context_is_lpac() - Checks if context is LPAC
- * @context: KGSL context to check
- *
- * Function returns true if context is LPAC else false
- */
-static inline bool kgsl_context_is_lpac(struct kgsl_context *context)
-{
-	if (context == NULL)
-		return false;
-
-	return (context->flags & KGSL_CONTEXT_LPAC) ? true : false;
-}
 
 #endif  /* __KGSL_DEVICE_H */
